@@ -1,12 +1,12 @@
 import { query, run } from './database';
 import { newId } from './id';
-import { createDefaultVarieties } from './varieties';
+import { createDefaultVarieties, hasConfiguredVarieties } from './varieties';
 
 // Using one fixed demo tenant for now. Real tenant/login handling is a later module.
 export const DEMO_TENANT_ID = 'tenant_demo';
 
 export function listProducts() {
-  return query(
+  const rows = query(
     `SELECT p.*, c.name AS category_name
      FROM products p
      LEFT JOIN categories c ON c.id = p.category_id
@@ -14,6 +14,9 @@ export function listProducts() {
      ORDER BY p.created_at DESC`,
     [DEMO_TENANT_ID]
   );
+  // Flag products that still need their varieties (other than Piece) set up,
+  // so the list can warn about it instead of it being easy to miss.
+  return rows.map((r) => ({ ...r, varieties_configured: hasConfiguredVarieties(r.id) }));
 }
 
 export function getProduct(id) {
@@ -40,7 +43,7 @@ export async function addProduct({ name, barcode, sku, categoryId, quantity, bas
       Number(base_price) || 0,
     ]
   );
-  await createDefaultVarieties(id);
+  await createDefaultVarieties(id, Number(base_price) || 0);
   return id;
 }
 

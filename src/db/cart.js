@@ -44,6 +44,12 @@ export function availableStockFor(product, productId = product.id, excludingCart
 // is already in the cart. Throws a plain Error with a user-facing message if
 // there isn't enough stock - the UI is expected to catch and display it.
 export async function addToCart(product, variety, qtyToAdd = 1) {
+  if (!variety.qty || variety.qty <= 0) {
+    throw new Error(
+      `"${variety.name}" has not been set up yet (Qty is 0). Open this product and set its Qty/Price in Product Varieties before selling it.`
+    );
+  }
+
   const requiredBaseUnits = variety.qty * qtyToAdd;
   const available = availableStockFor(product);
 

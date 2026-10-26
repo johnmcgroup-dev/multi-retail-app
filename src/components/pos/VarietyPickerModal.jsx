@@ -4,7 +4,10 @@ import { availableStockFor } from '../../db/cart';
 
 export default function VarietyPickerModal({ product, onAdd, onClose }) {
   const varieties = listVarietiesForProduct(product.id);
-  const [varietyId, setVarietyId] = useState(varieties[0]?.id || '');
+  // Default to the first variety that's actually set up (Qty > 0), so the
+  // user doesn't land on an unconfigured one and hit an error immediately.
+  const firstReady = varieties.find((v) => v.qty > 0);
+  const [varietyId, setVarietyId] = useState((firstReady || varieties[0])?.id || '');
   const [qty, setQty] = useState(1);
   const [error, setError] = useState('');
 
@@ -30,12 +33,21 @@ export default function VarietyPickerModal({ product, onAdd, onClose }) {
 
         <label className="modal-label">Variety</label>
         <select value={varietyId} onChange={(e) => setVarietyId(e.target.value)} className="modal-select">
-          {varieties.map((v) => (
-            <option key={v.id} value={v.id}>
-              {isHalfVariety(v.name) ? `↳ ${v.name}` : v.name} — {v.price.toFixed(2)}
-            </option>
-          ))}
+          {varieties.map((v) => {
+            const notSetUp = !v.qty || v.qty <= 0;
+            const label = isHalfVariety(v.name) ? `↳ ${v.name}` : v.name;
+            return (
+              <option key={v.id} value={v.id}>
+                {label} — {notSetUp ? 'not set up yet' : v.price.toFixed(2)}
+              </option>
+            );
+          })}
         </select>
+        {selected && (!selected.qty || selected.qty <= 0) && (
+          <p className="modal-error">
+            This variety isn't set up yet. Cancel, open the product, and set its Qty/Price first.
+          </p>
+        )}
 
         <label className="modal-label">Quantity</label>
         <input
@@ -54,7 +66,13 @@ export default function VarietyPickerModal({ product, onAdd, onClose }) {
 
         <div className="modal-actions">
           <button className="small-btn secondary" onClick={onClose}>Cancel</button>
-          <button className="small-btn" onClick={handleAdd}>Add to Cart</button>
+          <button
+            className="small-btn"
+            onClick={handleAdd}
+            disabled={!selected || !selected.qty || selected.qty <= 0}
+          >
+            Add to Cart
+          </button>
         </div>
       </div>
     </div>

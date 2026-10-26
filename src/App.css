@@ -207,6 +207,29 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
   vertical-align: middle;
 }
 
+.fixed-badge {
+  margin-left: 0.4rem;
+  font-size: 0.68rem;
+  background: var(--border);
+  color: var(--muted);
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.setup-badge {
+  margin-left: 0.5rem;
+  font-size: 0.68rem;
+  background: #f59e0b;
+  color: #432b00;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  vertical-align: middle;
+  font-weight: 600;
+}
+
+.needs-setup-row td:first-child { color: #f59e0b; }
+
 .unsaved-notice {
   color: #fbbf24;
   font-size: 0.85rem;

@@ -6,6 +6,7 @@ import {
   resetHalfToParent,
   HALF_TO_PARENT,
   isHalfVariety,
+  PIECE_NAME,
 } from '../db/varieties';
 
 // Order to display rows in: each parent immediately followed by its Half-X (if any).
@@ -79,9 +80,10 @@ export default function VarietyEditor({ productId }) {
         {savedMessage && <span className="saved-msg">{savedMessage}</span>}
       </div>
       <p className="variety-hint">
-        Half-X values auto-fill as half of their parent. Edit one manually to
-        override it — it will then stop auto-updating until you press Reset.
-        Nothing is saved until you click Save on that row.
+        <strong>This is where you set up each variety for sale on the POS page.</strong> A
+        variety with Qty = 0 cannot be sold yet — set its Qty and Price below, then click
+        Save on that row. Half-X values auto-fill as half of their parent; edit one
+        manually to override it — it will then stop auto-updating until you press Reset.
       </p>
 
       <table className="variety-table">
@@ -99,22 +101,30 @@ export default function VarietyEditor({ productId }) {
             if (!variety) return null;
             const half = isHalfVariety(name);
             const unsaved = hasUnsavedChanges(variety);
+            const isPiece = name === PIECE_NAME;
+            const notSetUp = !half && !isPiece && (!variety.qty || variety.qty <= 0);
 
             return (
-              <tr key={variety.id} className={half ? 'half-row' : 'parent-row'}>
+              <tr key={variety.id} className={`${half ? 'half-row' : 'parent-row'} ${notSetUp ? 'needs-setup-row' : ''}`}>
                 <td>
                   {half ? `↳ ${name}` : name}
                   {half && variety.is_manual_override ? (
                     <span className="override-badge" title="Manually overridden">custom</span>
                   ) : null}
+                  {isPiece && <span className="fixed-badge" title="Always equals 1 base stock unit">fixed</span>}
+                  {notSetUp && <span className="setup-badge">not set up</span>}
                 </td>
                 <td>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={draft[variety.id]?.qty ?? variety.qty}
-                    onChange={(e) => handleChange(variety, 'qty', e.target.value)}
-                  />
+                  {isPiece ? (
+                    <input type="number" value="1" disabled title="Piece always equals 1 base stock unit" />
+                  ) : (
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={draft[variety.id]?.qty ?? variety.qty}
+                      onChange={(e) => handleChange(variety, 'qty', e.target.value)}
+                    />
+                  )}
                 </td>
                 <td>
                   <input

@@ -31,8 +31,11 @@ export default function App() {
   }
 
   async function handleAdd(data) {
-    await addProduct(data);
+    const newProductId = await addProduct(data);
     refresh();
+    // Jump straight into the variety editor so setting up Qty/Price for each
+    // variety isn't an easy-to-miss extra step.
+    setOpenProductId(newProductId);
   }
 
   async function handleDelete(id) {

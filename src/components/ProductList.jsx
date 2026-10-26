@@ -21,6 +21,9 @@ export default function ProductList({ products, onDelete, onOpen }) {
           <tr key={p.id}>
             <td>
               <button className="link-btn name-link" onClick={() => onOpen(p.id)}>{p.name}</button>
+              {!p.varieties_configured && (
+                <span className="setup-badge" title="No sellable varieties set up yet">needs setup</span>
+              )}
             </td>
             <td>{p.category_name || '—'}</td>
             <td>{p.barcode || '—'}</td>

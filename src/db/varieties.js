@@ -44,22 +44,42 @@ export function calcHalf(parentQty, parentPrice) {
   };
 }
 
+export const PIECE_NAME = 'Piece';
+
 export function listVarietiesForProduct(productId) {
   return query(`SELECT * FROM product_varieties WHERE product_id = ? ORDER BY name`, [productId]);
 }
 
+// True if this product has at least one variety (besides Piece, which is
+// always fixed) that has actually been configured with a real Qty and Price.
+// Used to warn on the product list that a new product still needs setup.
+export function hasConfiguredVarieties(productId) {
+  const rows = query(
+    `SELECT COUNT(*) AS c FROM product_varieties
+     WHERE product_id = ? AND name != ? AND qty > 0 AND price > 0`,
+    [productId, PIECE_NAME]
+  );
+  return rows[0].c > 0;
+}
+
 // Creates all 6 parent varieties + 5 half varieties for a brand-new product.
-// Parents start at qty 0 / price 0 (user fills them in); halves start auto-calculated (0/0, so also 0).
-export async function createDefaultVarieties(productId) {
+// "Piece" is special: it IS the base stock unit, so its Qty is always fixed
+// at 1 (never 0, and not user-editable) - otherwise stock math would treat
+// selling a Piece as consuming zero stock, which allowed unlimited overselling.
+// Its starting price comes from the product's base price entered on the form.
+// Other parents start at qty 0 / price 0 until the user sets them up; halves
+// start auto-calculated from their (currently 0) parent, so also 0.
+export async function createDefaultVarieties(productId, piecePrice = 0) {
   const parentIds = {};
 
   for (const name of PARENT_VARIETY_NAMES) {
     const id = newId('var');
     parentIds[name] = id;
+    const isPiece = name === PIECE_NAME;
     await run(
       `INSERT INTO product_varieties (id, product_id, name, qty, price, is_half_variant, parent_variety_id, is_manual_override)
-       VALUES (?, ?, ?, 0, 0, 0, NULL, 0)`,
-      [id, productId, name]
+       VALUES (?, ?, ?, ?, ?, 0, NULL, 0)`,
+      [id, productId, name, isPiece ? 1 : 0, isPiece ? piecePrice : 0]
     );
   }
 
@@ -75,9 +95,14 @@ export async function createDefaultVarieties(productId) {
 
 // Update a PARENT variety's qty/price. After saving, re-sync any of its half-variety
 // children that have NOT been manually overridden by the user.
+// Locked at this layer (not just the UI): Piece's Qty can never become anything
+// but 1, since it defines what "1 base stock unit" means.
 export async function updateParentVariety(varietyId, { qty, price }) {
+  const [existing] = query(`SELECT * FROM product_varieties WHERE id = ?`, [varietyId]);
+  const safeQty = existing && existing.name === PIECE_NAME ? 1 : roundQty(qty);
+
   await run(`UPDATE product_varieties SET qty = ?, price = ? WHERE id = ?`, [
-    roundQty(qty),
+    safeQty,
     roundPrice(price),
     varietyId,
   ]);
@@ -88,7 +113,7 @@ export async function updateParentVariety(varietyId, { qty, price }) {
   );
 
   for (const child of children) {
-    const half = calcHalf(qty, price);
+    const half = calcHalf(safeQty, price);
     await run(`UPDATE product_varieties SET qty = ?, price = ? WHERE id = ?`, [
       half.qty,
       half.price,
