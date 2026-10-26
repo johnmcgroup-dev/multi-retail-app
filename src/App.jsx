@@ -5,6 +5,7 @@ import { listCategories, ensureSeedCategories } from './db/categories';
 import ProductForm from './components/ProductForm';
 import ProductList from './components/ProductList';
 import ProductDetail from './components/ProductDetail';
+import POSPage from './components/pos/POSPage';
 import './App.css';
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [openProductId, setOpenProductId] = useState(null);
+  const [tab, setTab] = useState('products'); // 'products' | 'pos'
 
   useEffect(() => {
     (async () => {
@@ -45,18 +47,28 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>StockApp — Module 2: Products &amp; Varieties</h1>
-        <p className="subtitle">
-          Click a product's name to open it and manage its varieties
-          (Piece/Roll/Bundle/Dozen/Packet/Carton + Half-X).
-        </p>
-      </header>
+      <nav className="top-nav">
+        <button className={tab === 'products' ? 'nav-btn active' : 'nav-btn'} onClick={() => setTab('products')}>
+          Products / Stocking
+        </button>
+        <button className={tab === 'pos' ? 'nav-btn active' : 'nav-btn'} onClick={() => setTab('pos')}>
+          POS / Sales
+        </button>
+      </nav>
 
-      {openProductId ? (
+      {tab === 'pos' ? (
+        <POSPage />
+      ) : openProductId ? (
         <ProductDetail productId={openProductId} onBack={() => { setOpenProductId(null); refresh(); }} />
       ) : (
         <>
+          <header>
+            <h1>StockApp — Module 2: Products &amp; Varieties</h1>
+            <p className="subtitle">
+              Click a product's name to open it and manage its varieties
+              (Piece/Roll/Bundle/Dozen/Packet/Carton + Half-X).
+            </p>
+          </header>
           <ProductForm categories={categories} onAdd={handleAdd} />
           <ProductList products={products} onDelete={handleDelete} onOpen={setOpenProductId} />
         </>

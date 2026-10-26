@@ -66,6 +66,44 @@ CREATE TABLE IF NOT EXISTS product_varieties (
   is_manual_override INTEGER NOT NULL DEFAULT 0
 );
 
+-- CART ITEMS: the live, in-progress sale. Rows here persist in the offline
+-- database (not just memory), so the cart survives a page refresh, closing
+-- the browser, or navigating away - it only empties on a completed sale or
+-- the Clear button (see cart.js for that logic).
+CREATE TABLE IF NOT EXISTS cart_items (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  product_id TEXT NOT NULL REFERENCES products(id),
+  variety_id TEXT NOT NULL REFERENCES product_varieties(id),
+  product_name TEXT NOT NULL,   -- snapshot, so cart still reads fine even if product is renamed later
+  variety_name TEXT NOT NULL,
+  unit_price REAL NOT NULL,
+  base_units_per_item REAL NOT NULL, -- how many base (Piece) units one of this variety consumes
+  quantity REAL NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- SALES: a completed, finalized transaction
+CREATE TABLE IF NOT EXISTS sales (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  total REAL NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- SALE ITEMS: a frozen snapshot of each cart line at the moment of sale
+CREATE TABLE IF NOT EXISTS sale_items (
+  id TEXT PRIMARY KEY,
+  sale_id TEXT NOT NULL REFERENCES sales(id),
+  product_id TEXT NOT NULL,
+  variety_id TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  variety_name TEXT NOT NULL,
+  unit_price REAL NOT NULL,
+  quantity REAL NOT NULL,
+  line_total REAL NOT NULL
+);
+
 -- SYNC METADATA: every table that needs offline<->cloud sync gets a row here
 -- so we always know what changed locally and hasn't been pushed to the server yet.
 CREATE TABLE IF NOT EXISTS sync_queue (
