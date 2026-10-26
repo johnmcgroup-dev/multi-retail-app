@@ -1,0 +1,214 @@
+:root {
+  --bg: #0f172a;
+  --panel: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #22c55e;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f8fafc;
+    --panel: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
+.subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0; }
+
+.loading {
+  display: flex;
+  height: 100vh;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+}
+
+.product-form {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+}
+.product-form h3 { margin-top: 0; }
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.form-row input {
+  flex: 1 1 120px;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.form-row button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  border: none;
+  background: var(--accent);
+  color: #06230f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.product-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.product-table th, .product-table td {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.product-table th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+
+.link-btn {
+  background: none;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  padding: 0;
+}
+
+.empty-state { color: var(--muted); }
+
+.form-row select {
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.name-link {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.danger { color: #f87171; }
+
+.product-detail { margin-top: 1rem; }
+.product-meta { color: var(--muted); font-size: 0.85rem; }
+
+.variety-editor {
+  margin-top: 1.5rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.variety-header-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.saved-msg {
+  color: var(--accent);
+  font-size: 0.85rem;
+}
+
+.variety-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-top: 0.25rem;
+}
+
+.variety-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.75rem;
+}
+
+.variety-table th, .variety-table td {
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.variety-table th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+
+.parent-row td:first-child { font-weight: 600; }
+.half-row td:first-child { color: var(--muted); padding-left: 1.2rem; }
+
+.variety-table input {
+  width: 90px;
+  padding: 0.35rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.variety-actions { display: flex; gap: 0.4rem; }
+
+.small-btn {
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--accent);
+  color: #06230f;
+  font-weight: 600;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.small-btn:disabled {
+  background: var(--border);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+.small-btn.secondary {
+  background: transparent;
+  color: var(--text);
+}
+
+.override-badge {
+  margin-left: 0.4rem;
+  font-size: 0.68rem;
+  background: #7c3aed;
+  color: white;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.unsaved-notice {
+  color: #fbbf24;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}

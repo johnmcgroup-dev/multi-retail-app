@@ -1,0 +1,79 @@
+-- StockApp offline-first database schema
+-- This same schema will run both in the browser (offline, via sql.js/WASM)
+-- and later on the real server (SQLite or Postgres), so data moves cleanly
+-- from offline-first local storage to cloud sync without being redesigned.
+
+-- TENANTS: each company/business using the app
+CREATE TABLE IF NOT EXISTS tenants (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- BRANCHES: outlets/warehouses belonging to a tenant (built now, used fully in a later module)
+CREATE TABLE IF NOT EXISTS branches (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- USERS: logins, scoped to a tenant, with a role
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT REFERENCES tenants(id), -- NULL only for super_admin
+  branch_id TEXT REFERENCES branches(id),
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  role TEXT NOT NULL CHECK (role IN ('super_admin','owner','admin','manager','cashier')),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- CATEGORIES
+CREATE TABLE IF NOT EXISTS categories (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL
+);
+
+-- PRODUCTS: the core item record
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  branch_id TEXT REFERENCES branches(id),
+  name TEXT NOT NULL,
+  barcode TEXT,
+  sku TEXT,
+  category_id TEXT REFERENCES categories(id),
+  quantity REAL NOT NULL DEFAULT 0,  -- base stock quantity (in "Piece" units)
+  base_price REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  deleted_at TEXT  -- soft delete, needed later for sync conflict handling
+);
+
+-- PRODUCT VARIETIES: Piece, Roll, Bundle, Dozen, Packet, Carton, Half-X, etc.
+CREATE TABLE IF NOT EXISTS product_varieties (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL REFERENCES products(id),
+  name TEXT NOT NULL,         -- e.g. "Carton", "Half-Carton"
+  qty REAL NOT NULL,          -- how many base units this variety represents
+  price REAL NOT NULL,
+  is_half_variant INTEGER NOT NULL DEFAULT 0,
+  parent_variety_id TEXT REFERENCES product_varieties(id), -- for Half-X auto-calc link
+  is_manual_override INTEGER NOT NULL DEFAULT 0
+);
+
+-- SYNC METADATA: every table that needs offline<->cloud sync gets a row here
+-- so we always know what changed locally and hasn't been pushed to the server yet.
+CREATE TABLE IF NOT EXISTS sync_queue (
+  id TEXT PRIMARY KEY,
+  table_name TEXT NOT NULL,
+  record_id TEXT NOT NULL,
+  operation TEXT NOT NULL CHECK (operation IN ('insert','update','delete')),
+  payload TEXT NOT NULL, -- JSON snapshot of the row
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  synced INTEGER NOT NULL DEFAULT 0
+);
