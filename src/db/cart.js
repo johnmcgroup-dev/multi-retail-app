@@ -117,7 +117,7 @@ export async function clearCart() {
 //  3. Empties the cart.
 // If anything looks wrong (e.g. stock changed since items were added), this
 // re-checks stock right before committing, so we never oversell.
-export async function completeSale() {
+export async function completeSale({ customerName = '', customerPhone = '' } = {}) {
   const items = listCart();
   if (items.length === 0) {
     throw new Error('Cart is empty.');
@@ -141,11 +141,10 @@ export async function completeSale() {
 
   const total = cartTotal(items);
   const saleId = newId('sale');
-  await run(`INSERT INTO sales (id, tenant_id, total) VALUES (?, ?, ?)`, [
-    saleId,
-    DEMO_TENANT_ID,
-    total,
-  ]);
+  await run(
+    `INSERT INTO sales (id, tenant_id, total, customer_name, customer_phone) VALUES (?, ?, ?, ?, ?)`,
+    [saleId, DEMO_TENANT_ID, total, customerName || null, customerPhone || null]
+  );
 
   for (const item of items) {
     const lineTotal = item.unit_price * item.quantity;

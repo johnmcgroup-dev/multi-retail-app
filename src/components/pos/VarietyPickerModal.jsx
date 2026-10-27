@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { listVarietiesForProduct, isHalfVariety } from '../../db/varieties';
+import { listVarietiesForProduct, isHalfVariety, PIECE_NAME } from '../../db/varieties';
 import { availableStockFor } from '../../db/cart';
 
 export default function VarietyPickerModal({ product, onAdd, onClose }) {
   const varieties = listVarietiesForProduct(product.id);
-  // Default to the first variety that's actually set up (Qty > 0), so the
-  // user doesn't land on an unconfigured one and hit an error immediately.
-  const firstReady = varieties.find((v) => v.qty > 0);
-  const [varietyId, setVarietyId] = useState((firstReady || varieties[0])?.id || '');
+  // Default to "Piece" every time - it's always guaranteed to be set up
+  // (fixed at Qty 1), so it's the one safe, predictable default regardless
+  // of which other varieties have been configured for this product.
+  const pieceVariety = varieties.find((v) => v.name === PIECE_NAME);
+  const [varietyId, setVarietyId] = useState((pieceVariety || varieties[0])?.id || '');
   const [qty, setQty] = useState(1);
   const [error, setError] = useState('');
 

@@ -4,6 +4,8 @@ import { cartTotal, updateCartItemQuantity, removeCartItem, clearCart, completeS
 export default function CartPanel({ items, onChanged, onSaleCompleted }) {
   const [error, setError] = useState('');
   const [completing, setCompleting] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   const total = cartTotal(items);
 
@@ -34,8 +36,10 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
     setError('');
     setCompleting(true);
     try {
-      const saleId = await completeSale();
+      const saleId = await completeSale({ customerName, customerPhone });
       onChanged();
+      setCustomerName('');
+      setCustomerPhone('');
       onSaleCompleted(saleId);
     } catch (err) {
       setError(err.message);
@@ -88,6 +92,23 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
       )}
 
       {error && <p className="modal-error">{error}</p>}
+
+      <div className="customer-fields">
+        <label className="modal-label">Customer name (optional)</label>
+        <input
+          className="modal-input"
+          value={customerName}
+          onChange={(e) => setCustomerName(e.target.value)}
+          placeholder="Walk-in customer"
+        />
+        <label className="modal-label">Customer phone (optional)</label>
+        <input
+          className="modal-input"
+          value={customerPhone}
+          onChange={(e) => setCustomerPhone(e.target.value)}
+          placeholder="e.g. 080XXXXXXXX"
+        />
+      </div>
 
       <div className="cart-totals">
         <span>Total</span>

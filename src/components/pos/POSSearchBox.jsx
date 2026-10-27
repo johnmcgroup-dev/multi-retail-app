@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchProducts } from '../../db/search';
 
-export default function POSSearchBox({ onSelectProduct }) {
+export default function POSSearchBox({ onSelectProduct, refreshSignal }) {
   const [term, setTerm] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -9,7 +9,10 @@ export default function POSSearchBox({ onSelectProduct }) {
 
   useEffect(() => {
     setResults(searchProducts(term));
-  }, [term, open]);
+    // refreshSignal changes after any cart action or completed sale, so stock
+    // levels shown here (and the out-of-stock disabled state) stay current
+    // without needing a page refresh.
+  }, [term, open, refreshSignal]);
 
   useEffect(() => {
     function handleClickOutside(e) {

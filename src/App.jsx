@@ -6,6 +6,8 @@ import ProductForm from './components/ProductForm';
 import ProductList from './components/ProductList';
 import ProductDetail from './components/ProductDetail';
 import POSPage from './components/pos/POSPage';
+import SalesHistoryPage from './components/invoice/SalesHistoryPage';
+import CompanySettingsPage from './components/CompanySettingsPage';
 import './App.css';
 
 export default function App() {
@@ -13,7 +15,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [openProductId, setOpenProductId] = useState(null);
-  const [tab, setTab] = useState('products'); // 'products' | 'pos'
+  const [tab, setTab] = useState('products'); // 'products' | 'pos' | 'history' | 'settings'
 
   useEffect(() => {
     (async () => {
@@ -28,6 +30,14 @@ export default function App() {
   function refresh() {
     setProducts(listProducts());
     setCategories(listCategories());
+  }
+
+  // Re-read product data whenever the user switches to the Products tab,
+  // since stock quantities may have changed on the POS tab (a completed
+  // sale) without this screen knowing about it.
+  function handleTabChange(nextTab) {
+    setTab(nextTab);
+    if (nextTab === 'products') refresh();
   }
 
   async function handleAdd(data) {
@@ -50,23 +60,33 @@ export default function App() {
 
   return (
     <div className="app">
-      <nav className="top-nav">
-        <button className={tab === 'products' ? 'nav-btn active' : 'nav-btn'} onClick={() => setTab('products')}>
+      <nav className="top-nav no-print">
+        <button className={tab === 'products' ? 'nav-btn active' : 'nav-btn'} onClick={() => handleTabChange('products')}>
           Products / Stocking
         </button>
-        <button className={tab === 'pos' ? 'nav-btn active' : 'nav-btn'} onClick={() => setTab('pos')}>
+        <button className={tab === 'pos' ? 'nav-btn active' : 'nav-btn'} onClick={() => handleTabChange('pos')}>
           POS / Sales
+        </button>
+        <button className={tab === 'history' ? 'nav-btn active' : 'nav-btn'} onClick={() => handleTabChange('history')}>
+          Sales History
+        </button>
+        <button className={tab === 'settings' ? 'nav-btn active' : 'nav-btn'} onClick={() => handleTabChange('settings')}>
+          Company Settings
         </button>
       </nav>
 
       {tab === 'pos' ? (
         <POSPage />
+      ) : tab === 'history' ? (
+        <SalesHistoryPage />
+      ) : tab === 'settings' ? (
+        <CompanySettingsPage />
       ) : openProductId ? (
         <ProductDetail productId={openProductId} onBack={() => { setOpenProductId(null); refresh(); }} />
       ) : (
         <>
           <header>
-            <h1>StockApp — Module 2: Products &amp; Varieties</h1>
+            <h1>StockApp — Module 4: Products, POS &amp; Invoicing</h1>
             <p className="subtitle">
               Click a product's name to open it and manage its varieties
               (Piece/Roll/Bundle/Dozen/Packet/Carton + Half-X).

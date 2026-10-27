@@ -88,7 +88,18 @@ CREATE TABLE IF NOT EXISTS sales (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   total REAL NOT NULL,
+  customer_name TEXT,   -- optional, captured at checkout for the invoice
+  customer_phone TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- COMPANY SETTINGS: shown at the top of every invoice. One row per tenant.
+CREATE TABLE IF NOT EXISTS company_settings (
+  tenant_id TEXT PRIMARY KEY REFERENCES tenants(id),
+  company_name TEXT NOT NULL DEFAULT '',
+  address TEXT NOT NULL DEFAULT '',
+  phone TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL DEFAULT ''
 );
 
 -- SALE ITEMS: a frozen snapshot of each cart line at the moment of sale
