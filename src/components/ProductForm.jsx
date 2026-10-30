@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function ProductForm({ categories, onAdd }) {
+export default function ProductForm({ categories, onAdd, stockEnabled = true }) {
   const [name, setName] = useState('');
   const [barcode, setBarcode] = useState('');
   const [sku, setSku] = useState('');
@@ -31,10 +31,17 @@ export default function ProductForm({ categories, onAdd }) {
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
-        <input placeholder="Base Qty (Piece)" type="number" value={quantity} onChange={(e) => setQuantity(e.target.value)} />
+        <input
+          placeholder={stockEnabled ? 'Opening stock (Pieces)' : 'Pick a branch to set stock'}
+          type="number" value={quantity} disabled={!stockEnabled}
+          onChange={(e) => setQuantity(e.target.value)}
+        />
         <input placeholder="Base Price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
         <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Add Product'}</button>
       </div>
+      {!stockEnabled && (
+        <p className="modal-hint">You are viewing all branches, so the product will be created with no stock. Select a branch to add opening stock.</p>
+      )}
     </form>
   );
 }

@@ -13,6 +13,7 @@
 
 import initSqlJs from 'sql.js';
 import schemaSql from './schema.sql?raw';
+import { runMigrations } from './migrations';
 
 const DB_NAME = 'stockapp-db';
 const STORE_NAME = 'sqlite-file';
@@ -71,6 +72,10 @@ export async function initDatabase() {
   // and lets us add new tables in later modules without wiping existing data.
   db.run(schemaSql);
 
+  // Schema creates missing TABLES; this adds missing COLUMNS to tables that
+  // already existed from an earlier version of the app on this device.
+  await runMigrations();
+
   await saveToDisk();
   return db;
 }
@@ -96,6 +101,28 @@ export function query(sql, params = []) {
 // Run a statement that changes data (INSERT/UPDATE/DELETE)
 export async function run(sql, params = []) {
   db.run(sql, params);
+  await saveToDisk();
+}
+
+// Runs a statement WITHOUT saving to disk afterwards. Only for bulk work
+// (like startup migrations) where the caller saves once at the end.
+export function runUnsaved(sql, params = []) {
+  db.run(sql, params);
+}
+
+// Runs several statements as ONE all-or-nothing unit, then saves once. If any
+// statement fails, everything already applied in the batch is rolled back, so
+// e.g. a stock transfer can never take units out of one branch without
+// putting them into the other.
+export async function runBatch(statements) {
+  db.run('BEGIN');
+  try {
+    for (const s of statements) db.run(s.sql, s.params || []);
+    db.run('COMMIT');
+  } catch (err) {
+    try { db.run('ROLLBACK'); } catch { /* nothing to roll back */ }
+    throw err;
+  }
   await saveToDisk();
 }
 

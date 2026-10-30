@@ -124,6 +124,16 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
 .product-detail { margin-top: 1rem; }
 .product-meta { color: var(--muted); font-size: 0.85rem; }
 
+.header-row, .product-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cart-row-actions { display: flex; gap: 0.6rem; }
+
 .variety-editor {
   margin-top: 1.5rem;
   background: var(--panel);
@@ -236,6 +246,74 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
   margin-top: 0.5rem;
 }
 
+.app-brand {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-bottom: 0.8rem;
+}
+
+.app-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* --- Auth screens --- */
+.auth-screen {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.auth-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 2rem;
+  width: 420px;
+  max-width: 100%;
+}
+.auth-card h1 { font-size: 1.3rem; margin-top: 0; }
+
+.auth-mode-tabs { display: flex; gap: 0.4rem; margin: 1rem 0; flex-wrap: wrap; }
+
+.auth-form { display: flex; flex-direction: column; gap: 0.3rem; }
+.auth-form button[type="submit"] { margin-top: 1rem; }
+
+.tenant-picker-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.tenant-picker-item {
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font-weight: 600;
+}
+.tenant-picker-item:hover { border-color: var(--accent); }
+
+.legacy-data-notice {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.5rem 0.7rem;
+  color: var(--text);
+}
+
 /* --- Navigation --- */
 .top-nav {
   display: flex;
@@ -316,6 +394,41 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
   cursor: pointer;
   text-align: left;
 }
+.pos-search-result-row { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); }
+.pos-search-result-row .pos-search-result { border-bottom: none; flex: 1; }
+.quick-add-stock-btn {
+  flex-shrink: 0;
+  padding: 0 0.8rem;
+  background: rgba(34,197,94,0.15);
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.add-stock-results {
+  margin-top: 0.4rem;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.add-stock-result {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0.7rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.add-stock-result:hover { background: rgba(34,197,94,0.08); }
+
 .pos-search-result:hover:not(.disabled) { background: rgba(34,197,94,0.08); }
 .pos-search-result.disabled {
   opacity: 0.45;
@@ -407,10 +520,93 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
   margin-top: 1rem;
   padding-top: 0.8rem;
   border-top: 1px solid var(--border);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  align-items: flex-start;
 }
+
+.customer-select { flex: 1 1 260px; }
+.customer-select-row { display: flex; gap: 0.4rem; }
+.customer-select-row .modal-select { flex: 1; }
+
+.new-customer-form {
+  margin-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.amount-paid-field { flex: 1 1 100%; margin-top: 0.6rem; }
+.payment-method-field { flex: 1 1 200px; }
+.credit-hint { color: #fbbf24; }
+
+.outstanding-toggle {
+  margin-top: 0.7rem;
+  padding: 0.5rem 0.7rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.outstanding-toggle label { display: flex; align-items: flex-start; gap: 0.4rem; cursor: pointer; }
+
+.cart-totals-sub { font-size: 0.9rem; color: var(--muted); margin-top: 0.2rem; }
+
+.loyalty-points-line { font-size: 0.9rem; color: var(--muted); }
+
+/* --- Expenses & Reports --- */
+.expense-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin: 1rem 0;
+  padding: 0.8rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.expense-filters .modal-label { margin-top: 0; }
+.expense-filters input, .expense-filters select {
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.expense-total-line { font-size: 1rem; margin: 0.6rem 0; }
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0 1.5rem;
+}
+.report-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.report-card strong { font-size: 1.4rem; }
+.report-card-label { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.report-card-positive strong { color: var(--accent); }
+.report-card-negative strong { color: #f87171; }
+
+.balance-owing { color: #f87171; font-weight: 600; }
+.balance-clear { color: var(--accent); }
+
+.ledger-credit { color: var(--accent); }
+.ledger-debit { color: #f87171; }
 
 .settings-form { max-width: 420px; }
 
@@ -465,18 +661,99 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
 .invoice-table .col-sn { width: 48px; text-align: center; }
 .invoice-table .col-num { text-align: right; }
 
+.invoice-totals-block { margin-top: 1rem; }
+
 .invoice-total-row {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  margin-top: 1rem;
   font-size: 1.1rem;
   padding-top: 0.6rem;
   border-top: 2px solid #111827;
+}
+
+.invoice-subtotal-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  font-size: 0.9rem;
+  color: #4b5563;
+  margin-top: 0.2rem;
+}
+.invoice-subtotal-row.balance-owing { color: #b91c1c; font-weight: 600; }
+
+.format-toggle { display: flex; gap: 0.4rem; }
+
+/* Thermal receipt - narrow, condensed, no inner table borders, matches a
+   58-80mm paper roll both on screen (preview) and when printed. */
+.invoice.thermal {
+  max-width: 300px;
+  padding: 1rem 0.8rem;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+.invoice.thermal .invoice-company h2 { font-size: 15px; }
+.invoice.thermal .invoice-company p { font-size: 11px; }
+.invoice.thermal .invoice-customer {
+  grid-template-columns: 1fr;
+  font-size: 11px;
+  gap: 0.1rem;
+}
+.invoice.thermal .invoice-table {
+  border: none;
+  margin-top: 0.8rem;
+}
+.invoice.thermal .invoice-table th,
+.invoice.thermal .invoice-table td {
+  border: none;
+  border-bottom: 1px dashed #9ca3af;
+  padding: 0.3rem 0.2rem;
+  font-size: 11px;
+}
+.invoice.thermal .invoice-table thead th { background: none; border-bottom: 1px solid #111827; }
+.invoice.thermal .thermal-variety-line { font-size: 10px; color: #6b7280; }
+.invoice.thermal .invoice-total-row,
+.invoice.thermal .invoice-subtotal-row { font-size: 12px; }
+.invoice.thermal .thermal-footer {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 11px;
+  color: #4b5563;
 }
 
 @media print {
   .no-print, .invoice-toolbar { display: none !important; }
   body { background: #fff; }
   .invoice { padding: 0; max-width: 100%; }
+  .invoice.thermal { max-width: 100%; padding: 0; }
+}
+
+/* --- Branches --- */
+.branch-switcher { display: flex; align-items: center; gap: 0.4rem; }
+.branch-switcher select {
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--bg);
+  color: var(--text);
+  font-weight: 600;
+}
+.branch-badge {
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.scope-notice {
+  background: var(--panel);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+.transfer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 0.6rem 1rem;
 }

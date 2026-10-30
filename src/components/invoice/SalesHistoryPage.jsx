@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
 import { listSales } from '../../db/sales';
+import { getCompanySettings } from '../../db/companySettings';
+import { getCurrentBranchId } from '../../db/session';
+import { formatMoney } from '../../db/currency';
 import Invoice from './Invoice';
 
 export default function SalesHistoryPage() {
   const [sales, setSales] = useState([]);
   const [openSaleId, setOpenSaleId] = useState(null);
+  const currencyCode = getCompanySettings().currency_code;
+  const showBranch = !getCurrentBranchId(); // viewing all branches
 
   useEffect(() => {
     setSales(listSales());
@@ -29,6 +34,7 @@ export default function SalesHistoryPage() {
             <tr>
               <th>Invoice #</th>
               <th>Date</th>
+              {showBranch && <th>Branch</th>}
               <th>Customer</th>
               <th>Total</th>
               <th></th>
@@ -39,8 +45,9 @@ export default function SalesHistoryPage() {
               <tr key={s.id}>
                 <td>{s.id.slice(-8).toUpperCase()}</td>
                 <td>{new Date(s.created_at).toLocaleString()}</td>
+                {showBranch && <td>{s.branch_name || '—'}</td>}
                 <td>{s.customer_name || 'Walk-in'}</td>
-                <td>{s.total.toFixed(2)}</td>
+                <td>{formatMoney(s.total, currencyCode)}</td>
                 <td>
                   <button className="link-btn name-link" onClick={() => setOpenSaleId(s.id)}>
                     View Invoice

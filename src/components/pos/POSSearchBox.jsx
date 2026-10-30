@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchProducts } from '../../db/search';
 
-export default function POSSearchBox({ onSelectProduct, refreshSignal }) {
+export default function POSSearchBox({ onSelectProduct, onQuickAddStock, refreshSignal }) {
   const [term, setTerm] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -54,20 +54,30 @@ export default function POSSearchBox({ onSelectProduct, refreshSignal }) {
             results.map((p) => {
               const outOfStock = p.quantity <= 0;
               return (
-                <button
-                  key={p.id}
-                  className={`pos-search-result ${outOfStock ? 'disabled' : ''}`}
-                  disabled={outOfStock}
-                  onClick={() => handleSelect(p)}
-                >
-                  <span className="psr-name">{p.name}</span>
-                  <span className="psr-meta">
-                    {p.category_name || 'Uncategorized'} · {p.barcode || p.sku || '—'}
-                  </span>
-                  <span className="psr-stock">
-                    {outOfStock ? 'Out of stock' : `${p.quantity} in stock`}
-                  </span>
-                </button>
+                <div key={p.id} className="pos-search-result-row">
+                  <button
+                    className={`pos-search-result ${outOfStock ? 'disabled' : ''}`}
+                    disabled={outOfStock}
+                    onClick={() => handleSelect(p)}
+                  >
+                    <span className="psr-name">{p.name}</span>
+                    <span className="psr-meta">
+                      {p.category_name || 'Uncategorized'} · {p.barcode || p.sku || '—'}
+                    </span>
+                    <span className="psr-stock">
+                      {outOfStock ? 'Out of stock' : `${p.quantity} in stock`}
+                    </span>
+                  </button>
+                  {outOfStock && onQuickAddStock && (
+                    <button
+                      type="button"
+                      className="quick-add-stock-btn"
+                      onClick={() => { onQuickAddStock(p); setOpen(false); }}
+                    >
+                      + Stock
+                    </button>
+                  )}
+                </div>
               );
             })
           )}

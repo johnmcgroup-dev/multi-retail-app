@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { listVarietiesForProduct, isHalfVariety, PIECE_NAME } from '../../db/varieties';
 import { availableStockFor } from '../../db/cart';
+import { getCompanySettings } from '../../db/companySettings';
+import { formatMoney } from '../../db/currency';
 
 export default function VarietyPickerModal({ product, onAdd, onClose }) {
   const varieties = listVarietiesForProduct(product.id);
+  const currencyCode = getCompanySettings().currency_code;
   // Default to "Piece" every time - it's always guaranteed to be set up
   // (fixed at Qty 1), so it's the one safe, predictable default regardless
   // of which other varieties have been configured for this product.
@@ -39,7 +42,7 @@ export default function VarietyPickerModal({ product, onAdd, onClose }) {
             const label = isHalfVariety(v.name) ? `↳ ${v.name}` : v.name;
             return (
               <option key={v.id} value={v.id}>
-                {label} — {notSetUp ? 'not set up yet' : v.price.toFixed(2)}
+                {label} — {notSetUp ? 'not set up yet' : formatMoney(v.price, currencyCode)}
               </option>
             );
           })}

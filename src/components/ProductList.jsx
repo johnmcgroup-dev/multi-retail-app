@@ -1,4 +1,8 @@
+import { getCompanySettings } from '../db/companySettings';
+import { formatMoney } from '../db/currency';
+
 export default function ProductList({ products, onDelete, onOpen }) {
+  const currencyCode = getCompanySettings().currency_code;
   if (products.length === 0) {
     return <p className="empty-state">No products yet. Add one above.</p>;
   }
@@ -29,7 +33,7 @@ export default function ProductList({ products, onDelete, onOpen }) {
             <td>{p.barcode || '—'}</td>
             <td>{p.sku || '—'}</td>
             <td>{p.quantity}</td>
-            <td>{Number(p.base_price).toFixed(2)}</td>
+            <td>{formatMoney(p.base_price, currencyCode)}</td>
             <td><button className="link-btn danger" onClick={() => onDelete(p.id)}>Remove</button></td>
           </tr>
         ))}
