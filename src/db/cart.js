@@ -9,18 +9,16 @@
 //    e.g. 1 Carton might equal 12 Pieces - so selling 2 Cartons requires
 //    24 Pieces of stock to be available.
 
-import { query, run } from './database';
+import { query, run, runBatch } from './database';
 import { newId } from './id';
 import { getCurrentTenantId, getCurrentBranchId, requireBranchId, getCurrentUser } from './session';
 import { getProduct } from './products';
-import { changeBranchStock } from './stock';
+import { stockChangeStatement } from './stock';
 import {
   ensureWalkInCustomer,
   getCustomer,
-  recordSaleCredit,
-  recordPaymentAppliedFromSale,
-  earnLoyaltyPoints,
-  redeemLoyaltyPoints,
+  ledgerStatements,
+  loyaltyStatements,
 } from './customers';
 import { getCompanySettings } from './companySettings';
 import { formatMoney } from './currency';
@@ -205,6 +203,11 @@ export async function completeSale({
   paymentMethod = 'cash',
 } = {}) {
   const branchId = requireBranchId();
+  // This is the ONLY await before the commit (it may create the Walk-in
+  // customer). From the next line until the single batch write at the bottom
+  // everything is synchronous, so nothing can change the cart, the stock or a
+  // balance between checking them and writing the sale.
+  const resolvedCustomerId = customerId || (await ensureWalkInCustomer());
   const items = listCart();
   if (items.length === 0) {
     throw new Error('Cart is empty.');
@@ -229,8 +232,8 @@ export async function completeSale({
   const saleTotal = cartTotal(items);
   const company = getCompanySettings();
 
-  const resolvedCustomerId = customerId || (await ensureWalkInCustomer());
   const customer = getCustomer(resolvedCustomerId);
+  if (!customer || customer.tenant_id !== getCurrentTenantId()) throw new Error('Customer not found.');
   const isWalkin = !!customer?.is_walkin;
   const applyToOldBalance = !isWalkin && includeOutstanding;
   const oldBalanceBefore = applyToOldBalance ? customer.balance : 0;
@@ -281,55 +284,83 @@ export async function completeSale({
       ? Math.floor(paidTowardSale * (company.points_per_amount || 0))
       : 0;
 
+  // ---- Everything below is built up front and committed as ONE batch. ----
+  // If any single write fails, the whole sale is rolled back: no half-recorded
+  // invoice, no stock taken without a sale, no balance changed without a ledger
+  // line, and the cart is left exactly as it was so the cashier can retry.
   const saleId = newId('sale');
-  await run(
-    `INSERT INTO sales
-       (id, tenant_id, branch_id, total, amount_paid, previous_balance_paid, payment_method, loyalty_points_earned,
-        customer_id, customer_name, customer_phone)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      saleId,
-      getCurrentTenantId(),
-      branchId,
-      saleTotal,
-      paidTowardSale,
-      paidTowardOldBalance,
-      paymentMethod,
-      pointsEarned,
-      resolvedCustomerId,
-      customer?.name || null,
-      customer?.phone || null,
-    ]
-  );
+  const tenantId = getCurrentTenantId();
+  const user = getCurrentUser();
+  const statements = [];
+
+  statements.push({
+    sql: `INSERT INTO sales
+            (id, tenant_id, branch_id, total, amount_paid, previous_balance_paid, payment_method, loyalty_points_earned,
+             customer_id, customer_name, customer_phone)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    params: [
+      saleId, tenantId, branchId, saleTotal, paidTowardSale, paidTowardOldBalance, paymentMethod, pointsEarned,
+      resolvedCustomerId, customer.name || null, customer.phone || null,
+    ],
+  });
 
   for (const item of items) {
-    const lineTotal = item.unit_price * item.quantity;
-    await run(
-      `INSERT INTO sale_items
-         (id, sale_id, product_id, variety_id, product_name, variety_name, unit_price, quantity, line_total)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [newId('si'), saleId, item.product_id, item.variety_id, item.product_name, item.variety_name, item.unit_price, item.quantity, lineTotal]
-    );
+    statements.push({
+      sql: `INSERT INTO sale_items
+              (id, sale_id, product_id, variety_id, product_name, variety_name, unit_price, quantity, line_total)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      params: [newId('si'), saleId, item.product_id, item.variety_id, item.product_name, item.variety_name,
+        item.unit_price, item.quantity, item.unit_price * item.quantity],
+    });
   }
 
   for (const [productId, required] of Object.entries(requiredByProduct)) {
-    await changeBranchStock(productId, branchId, -required);
+    statements.push(stockChangeStatement(productId, branchId, tenantId, -required));
   }
 
-  if (saleOutstanding > 0) {
-    await recordSaleCredit(resolvedCustomerId, saleId, saleOutstanding);
-  }
+  // The customer's account, as running figures: previous balance is paid
+  // down first, then any unpaid part of THIS sale is added as new debt.
+  let balance = customer.balance;
+  let points = customer.loyalty_points || 0;
+
   if (paidTowardOldBalance > 0) {
-    await recordPaymentAppliedFromSale(resolvedCustomerId, saleId, paidTowardOldBalance, paymentMethod);
+    const r = ledgerStatements({
+      customerId: resolvedCustomerId, balanceBefore: balance, type: 'payment', amount: paidTowardOldBalance,
+      note: 'Applied toward previous balance during a sale', saleId, paymentMethod, branchId,
+    });
+    statements.push(...r.statements);
+    balance = r.balanceAfter;
+  }
+  if (saleOutstanding > 0) {
+    const r = ledgerStatements({
+      customerId: resolvedCustomerId, balanceBefore: balance, type: 'sale_credit', amount: saleOutstanding,
+      note: 'Unpaid balance from sale', saleId, branchId,
+    });
+    statements.push(...r.statements);
+    balance = r.balanceAfter;
   }
   if (paymentMethod === 'loyalty' && pointsToRedeem > 0) {
-    await redeemLoyaltyPoints(resolvedCustomerId, pointsToRedeem, 'Redeemed for sale payment', saleId);
+    const r = loyaltyStatements({
+      customerId: resolvedCustomerId, pointsBefore: points, type: 'redeem', points: pointsToRedeem,
+      note: 'Redeemed for sale payment', saleId,
+    });
+    statements.push(...r.statements);
+    points = r.pointsAfter;
   }
   if (pointsEarned > 0) {
-    await earnLoyaltyPoints(resolvedCustomerId, pointsEarned, 'Earned from purchase', saleId);
+    const r = loyaltyStatements({
+      customerId: resolvedCustomerId, pointsBefore: points, type: 'earn', points: pointsEarned,
+      note: 'Earned from purchase', saleId,
+    });
+    statements.push(...r.statements);
   }
 
-  await deleteOwnCart();
+  // Last step: empty THIS user's cart at THIS branch.
+  statements.push({
+    sql: `DELETE FROM cart_items WHERE tenant_id = ? AND branch_id = ? AND user_id = ?`,
+    params: [tenantId, branchId, user.id],
+  });
 
+  await runBatch(statements);
   return saleId;
 }

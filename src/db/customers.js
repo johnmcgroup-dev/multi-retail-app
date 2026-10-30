@@ -1,4 +1,4 @@
-import { query, run } from './database';
+import { query, run, runBatch } from './database';
 import { newId } from './id';
 import { getCurrentTenantId, getCurrentBranchId, getDefaultBranchId } from './session';
 
@@ -73,83 +73,76 @@ export function listCustomerLedger(customerId) {
   );
 }
 
-// Internal helper - adds a ledger entry and updates the customer's running
-// balance in one step, so the two can never drift apart from each other.
-async function addLedgerEntry(customerId, type, amount, note, saleId = null, paymentMethod = null) {
-  const customer = getCustomer(customerId);
-  const delta = type === 'payment' ? -amount : amount; // payments reduce what they owe
-  const newBalance = Math.round((customer.balance + delta + Number.EPSILON) * 100) / 100;
-
-  await run(`UPDATE customers SET balance = ? WHERE id = ?`, [newBalance, customerId]);
-  await run(
-    `INSERT INTO customer_ledger (id, tenant_id, branch_id, customer_id, sale_id, type, amount, balance_after, payment_method, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    // Customers are shared by the whole tenant, but each money movement is
-    // attributed to the branch it happened at (the default branch when an
-    // owner records it while viewing all branches).
-    [newId('ledg'), getCurrentTenantId(), getCurrentBranchId() || getDefaultBranchId(getCurrentTenantId()),
-     customerId, saleId, type, amount, newBalance, paymentMethod, note || null]
-  );
+function round2(n) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
-// Called from cart.js when a sale isn't fully paid - records the unpaid
-// portion as debt owed by this customer.
-export async function recordSaleCredit(customerId, saleId, outstandingAmount) {
-  await addLedgerEntry(customerId, 'sale_credit', outstandingAmount, 'Unpaid balance from sale', saleId);
+// Builds (but does NOT run) the two writes behind one money movement on a
+// customer's account: the balance change and its ledger line. Returning
+// statements instead of running them is what lets a whole sale - stock,
+// invoice, balance, points, cart - be committed as ONE all-or-nothing batch.
+// `balanceBefore` is the balance going into THIS entry (callers chain several
+// entries by feeding each result's `balanceAfter` into the next).
+export function ledgerStatements({ customerId, balanceBefore, type, amount, note, saleId = null, paymentMethod = null, branchId = null }) {
+  const tenantId = getCurrentTenantId();
+  const delta = type === 'payment' ? -amount : amount; // payments reduce what they owe
+  const balanceAfter = round2(balanceBefore + delta);
+  return {
+    balanceAfter,
+    statements: [
+      { sql: `UPDATE customers SET balance = ROUND(balance + ?, 2) WHERE id = ? AND tenant_id = ?`, params: [delta, customerId, tenantId] },
+      {
+        sql: `INSERT INTO customer_ledger (id, tenant_id, branch_id, customer_id, sale_id, type, amount, balance_after, payment_method, note)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        // Customers are shared by the whole tenant, but each money movement is
+        // attributed to the branch it happened at (the default branch when an
+        // owner records it while viewing all branches).
+        params: [newId('ledg'), tenantId, branchId || getCurrentBranchId() || getDefaultBranchId(tenantId),
+          customerId, saleId, type, amount, balanceAfter, paymentMethod, note || null],
+      },
+    ],
+  };
+}
+
+// Same idea for loyalty points: the balance change plus its history line.
+export function loyaltyStatements({ customerId, pointsBefore, type, points, note, saleId = null }) {
+  const tenantId = getCurrentTenantId();
+  const delta = type === 'redeem' ? -points : points;
+  const pointsAfter = pointsBefore + delta;
+  return {
+    pointsAfter,
+    statements: [
+      { sql: `UPDATE customers SET loyalty_points = loyalty_points + ? WHERE id = ? AND tenant_id = ?`, params: [delta, customerId, tenantId] },
+      {
+        sql: `INSERT INTO loyalty_ledger (id, tenant_id, customer_id, sale_id, type, points, balance_after, note)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [newId('loy'), tenantId, customerId, saleId, type, points, pointsAfter, note || null],
+      },
+    ],
+  };
 }
 
 // A customer paying down some or all of what they owe, independent of any
 // specific new sale (e.g. they come in later and pay off an old balance,
-// with nothing in their cart). This is the "pay outstanding bill without
-// buying anything" path - reachable from a customer's ledger page.
+// with nothing in their cart). Reachable from a customer's ledger page.
 export async function recordPayment(customerId, amount, note = '', paymentMethod = 'cash') {
-  if (amount <= 0) throw new Error('Payment amount must be greater than zero.');
-  await addLedgerEntry(customerId, 'payment', amount, note || 'Payment received', null, paymentMethod);
+  const amt = Number(amount);
+  if (!(amt > 0)) throw new Error('Payment amount must be greater than zero.');
+  const customer = getCustomer(customerId);
+  if (!customer || customer.tenant_id !== getCurrentTenantId()) throw new Error('Customer not found.');
+
+  const { statements } = ledgerStatements({
+    customerId, balanceBefore: customer.balance, type: 'payment', amount: amt,
+    note: note || 'Payment received', paymentMethod,
+  });
+  await runBatch(statements);
 }
 
-// Called from cart.js when part of a sale's payment is applied toward an
-// EXISTING outstanding balance rather than today's purchase - keeps that
-// distinct from a standalone recordPayment so the ledger note is accurate.
-export async function recordPaymentAppliedFromSale(customerId, saleId, amount, paymentMethod) {
-  await addLedgerEntry(customerId, 'payment', amount, 'Applied toward previous balance during a sale', saleId, paymentMethod);
-}
-
-// --- Loyalty points ---
+// --- Loyalty points history ---
 
 export function listLoyaltyLedger(customerId) {
   return query(
-    `SELECT * FROM loyalty_ledger WHERE customer_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM loyalty_ledger WHERE customer_id = ? ORDER BY created_at ASC, rowid ASC`,
     [customerId]
   );
-}
-
-async function addLoyaltyEntry(customerId, type, points, note, saleId = null) {
-  const customer = getCustomer(customerId);
-  const delta = type === 'redeem' ? -points : points;
-  const newBalance = customer.loyalty_points + delta;
-
-  await run(`UPDATE customers SET loyalty_points = ? WHERE id = ?`, [newBalance, customerId]);
-  await run(
-    `INSERT INTO loyalty_ledger (id, tenant_id, customer_id, sale_id, type, points, balance_after, note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [newId('loy'), getCurrentTenantId(), customerId, saleId, type, points, newBalance, note || null]
-  );
-}
-
-export async function earnLoyaltyPoints(customerId, points, note, saleId = null) {
-  if (points <= 0) return;
-  await addLoyaltyEntry(customerId, 'earn', points, note || 'Earned from purchase', saleId);
-}
-
-// Throws if the customer doesn't have enough points - cart.js calls this
-// BEFORE completing the sale, so a failed redemption never leaves a sale
-// half-finished.
-export async function redeemLoyaltyPoints(customerId, points, note, saleId = null) {
-  const customer = getCustomer(customerId);
-  if (points > customer.loyalty_points) {
-    throw new Error(
-      `Not enough loyalty points. "${customer.name}" has ${customer.loyalty_points}, but ${points} are needed.`
-    );
-  }
-  await addLoyaltyEntry(customerId, 'redeem', points, note || 'Redeemed for payment', saleId);
 }
