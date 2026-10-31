@@ -247,6 +247,87 @@ CREATE TABLE IF NOT EXISTS stock_transfers (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- SUPPLIERS: shared by the whole tenant. `balance` is what WE OWE the
+-- supplier (positive = we owe them), mirroring how customers.balance is what
+-- a customer owes us.
+CREATE TABLE IF NOT EXISTS suppliers (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  name TEXT NOT NULL,
+  phone TEXT,
+  address TEXT,
+  balance REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- SUPPLIER LEDGER: running account history with a supplier - goods received
+-- (we owe more) and payments made (we owe less).
+CREATE TABLE IF NOT EXISTS supplier_ledger (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  branch_id TEXT REFERENCES branches(id),
+  supplier_id TEXT NOT NULL REFERENCES suppliers(id),
+  purchase_order_id TEXT REFERENCES purchase_orders(id),
+  type TEXT NOT NULL CHECK (type IN ('purchase', 'payment', 'adjustment')),
+  amount REAL NOT NULL,
+  balance_after REAL NOT NULL,
+  payment_method TEXT,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- PURCHASE ORDERS: an order placed with a supplier for ONE branch. Ordering
+-- changes no stock; stock rises only when goods are received (see receipts).
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  branch_id TEXT NOT NULL REFERENCES branches(id),
+  supplier_id TEXT NOT NULL REFERENCES suppliers(id),
+  po_number TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'ordered' CHECK (status IN ('ordered', 'partial', 'received', 'closed', 'cancelled')),
+  order_date TEXT NOT NULL,
+  expected_date TEXT,
+  note TEXT,
+  total REAL NOT NULL DEFAULT 0,
+  created_by TEXT REFERENCES users(id),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Each line is in a chosen unit (Piece, Carton...). units_per_unit is how many
+-- base Piece-units one of that unit is, frozen at order time, so receiving
+-- 2 Cartons adds 2 x units_per_unit to the branch's stock.
+CREATE TABLE IF NOT EXISTS purchase_order_items (
+  id TEXT PRIMARY KEY,
+  purchase_order_id TEXT NOT NULL REFERENCES purchase_orders(id),
+  product_id TEXT NOT NULL REFERENCES products(id),
+  variety_id TEXT REFERENCES product_varieties(id),
+  product_name TEXT NOT NULL,
+  unit_name TEXT NOT NULL,
+  units_per_unit REAL NOT NULL,
+  quantity_ordered REAL NOT NULL,
+  quantity_received REAL NOT NULL DEFAULT 0,
+  unit_cost REAL NOT NULL DEFAULT 0
+);
+
+-- RECEIPTS: each time goods arrive (a full or partial delivery) against an order.
+CREATE TABLE IF NOT EXISTS purchase_receipts (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL REFERENCES tenants(id),
+  purchase_order_id TEXT NOT NULL REFERENCES purchase_orders(id),
+  branch_id TEXT NOT NULL REFERENCES branches(id),
+  received_by TEXT REFERENCES users(id),
+  note TEXT,
+  total_value REAL NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS purchase_receipt_items (
+  id TEXT PRIMARY KEY,
+  receipt_id TEXT NOT NULL REFERENCES purchase_receipts(id),
+  purchase_order_item_id TEXT NOT NULL REFERENCES purchase_order_items(id),
+  quantity_received REAL NOT NULL
+);
+
 -- SYNC METADATA: every table that needs offline<->cloud sync gets a row here
 -- so we always know what changed locally and hasn't been pushed to the server yet.
 CREATE TABLE IF NOT EXISTS sync_queue (

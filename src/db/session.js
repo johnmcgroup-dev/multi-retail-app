@@ -144,6 +144,8 @@ const PAGE_ACCESS = {
   customers: ['super_admin', 'owner', 'admin', 'manager'],
   expenses: ['super_admin', 'owner', 'admin', 'manager'],
   transfers: ['super_admin', 'owner', 'admin', 'manager'],
+  suppliers: ['super_admin', 'owner', 'admin', 'manager'],
+  purchases: ['super_admin', 'owner', 'admin', 'manager'],
   branches: ['super_admin', 'owner', 'admin'],
   reports: ['super_admin', 'owner', 'admin'],
   users: ['super_admin', 'owner', 'admin'],

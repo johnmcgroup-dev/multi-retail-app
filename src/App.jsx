@@ -23,6 +23,8 @@ import UsersPage from './components/users/UsersPage';
 import BranchSwitcher from './components/branches/BranchSwitcher';
 import BranchesPage from './components/branches/BranchesPage';
 import TransfersPage from './components/branches/TransfersPage';
+import SuppliersPage from './components/purchases/SuppliersPage';
+import PurchaseOrdersPage from './components/purchases/PurchaseOrdersPage';
 import './App.css';
 
 const NAV_ITEMS = [
@@ -31,6 +33,8 @@ const NAV_ITEMS = [
   { key: 'history', label: 'Sales History' },
   { key: 'customers', label: 'Customers' },
   { key: 'transfers', label: 'Stock Transfers' },
+  { key: 'purchases', label: 'Purchase Orders' },
+  { key: 'suppliers', label: 'Suppliers' },
   { key: 'expenses', label: 'Expenses' },
   { key: 'reports', label: 'Reports' },
   { key: 'branches', label: 'Branches' },
@@ -170,6 +174,10 @@ export default function App() {
     page = <CustomersPage />;
   } else if (activeTab === 'transfers') {
     page = <TransfersPage onChanged={refresh} />;
+  } else if (activeTab === 'purchases') {
+    page = <PurchaseOrdersPage />;
+  } else if (activeTab === 'suppliers') {
+    page = <SuppliersPage />;
   } else if (activeTab === 'expenses') {
     page = <ExpensesPage />;
   } else if (activeTab === 'reports') {
