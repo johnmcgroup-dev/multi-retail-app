@@ -6,6 +6,7 @@ export default function CompanySettingsPage() {
   const [form, setForm] = useState({
     company_name: '', address: '', phone: '', email: '',
     points_per_amount: 0.1, points_redeem_value: 1.0, currency_code: 'USD',
+    default_credit_limit: '',
   });
   const [saved, setSaved] = useState(false);
 
@@ -53,6 +54,16 @@ export default function CompanySettingsPage() {
         <p className="modal-hint">
           Every price, total, and invoice across the app displays in this currency.
           This changes the display format only — it does not convert existing amounts.
+        </p>
+
+        <label className="modal-label">Default credit limit for new customers (optional)</label>
+        <input
+          className="modal-input" type="number" min="0" step="0.01" placeholder="No limit"
+          value={form.default_credit_limit ?? ''} onChange={(e) => handleChange('default_credit_limit', e.target.value)}
+        />
+        <p className="modal-hint">
+          Each NEW customer starts with this as the most they may owe. Existing customers are not changed - set
+          theirs from their page under Customers. Leave blank for no limit.
         </p>
 
         <h3 style={{ marginTop: '1.2rem' }}>Loyalty Program</h3>

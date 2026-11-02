@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initDatabase, query, runBatch } from '../src/db/database';
-import { createSuperAdmin, signUpAsNewTenantOwner, loginByEmail, createInviteCode, joinWithInviteCode } from '../src/db/users';
+import { createSuperAdmin, loginByEmail, createInviteCode } from '../src/db/users';
+import { signUpVerified, joinVerified } from './helpers';
 import { listBranches, addBranch, setBranchActive } from '../src/db/branches';
 import { addProduct, listProducts, getProduct, addStock } from '../src/db/products';
 import { searchProducts } from '../src/db/search';
@@ -19,7 +20,7 @@ const stockAt = (branchId) => listProductStockByBranch(productId).find((r) => r.
 beforeAll(async () => {
   await initDatabase();
   await createSuperAdmin({ name: 'Dev', email: 'dev@x.com' });
-  A = await signUpAsNewTenantOwner({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
+  A = await signUpVerified({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
 });
 
 describe('branches', () => {
@@ -99,7 +100,7 @@ describe('branch staff', () => {
 
   it('a cashier invited to Lekki is locked to Lekki and cannot transfer or manage branches', async () => {
     const code = await createInviteCode({ tenantId: A.tenantId, role: 'cashier', branchId: lekki.id, createdByUserId: A.userId });
-    await joinWithInviteCode({ code, name: 'Chidi', email: 'chidi@a.com' });
+    await joinVerified({ code, name: 'Chidi', email: 'chidi@a.com' });
     expect(getCurrentBranchId()).toBe(lekki.id);
     setViewingBranchId(mainA.id); // a cashier cannot pick another branch
     expect(getCurrentBranchId()).toBe(lekki.id);
@@ -143,7 +144,7 @@ describe('branch staff', () => {
 
   it('a manager can only transfer OUT of their own branch', async () => {
     const code = await createInviteCode({ tenantId: A.tenantId, role: 'manager', branchId: mainA.id, createdByUserId: A.userId });
-    await joinWithInviteCode({ code, name: 'Mary', email: 'mary@a.com' });
+    await joinVerified({ code, name: 'Mary', email: 'mary@a.com' });
     managerMain = true;
     await expect(transferStock({ productId, fromBranchId: lekki.id, toBranchId: mainA.id, quantity: 1 })).rejects.toThrow(/own branch/);
     await transferStock({ productId, fromBranchId: mainA.id, toBranchId: lekki.id, quantity: 1 });
@@ -174,7 +175,7 @@ describe('branch rules', () => {
 
 describe('tenant isolation still holds', () => {
   it('a second business cannot see or touch the first one\'s branches, stock or sales', async () => {
-    B = await signUpAsNewTenantOwner({ tenantName: 'Beta', name: 'Bob', email: 'bob@b.com' });
+    B = await signUpVerified({ tenantName: 'Beta', name: 'Bob', email: 'bob@b.com' });
     expect(listBranches()).toHaveLength(1);
     expect(listBranches()[0].id).not.toBe(mainA.id);
     expect(listProducts()).toHaveLength(0);

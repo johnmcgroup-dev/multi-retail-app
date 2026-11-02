@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { getCustomer, listCustomerLedger, listLoyaltyLedger, recordPayment, updateCustomer } from '../../db/customers';
+import { getCustomer, listCustomerLedger, listLoyaltyLedger, recordPayment, updateCustomer, setCustomerCreditLimit } from '../../db/customers';
 import { getCompanySettings } from '../../db/companySettings';
-import { getCurrentBranchId } from '../../db/session';
+import { getCurrentBranchId, getCurrentUser, isElevated } from '../../db/session';
 import { formatMoney } from '../../db/currency';
 
 const PAYMENT_METHODS = [
@@ -21,6 +21,8 @@ export default function CustomerLedger({ customerId, onBack, onChanged }) {
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState('');
   const [showLoyalty, setShowLoyalty] = useState(false);
+  const [limitInput, setLimitInput] = useState(() => getCustomer(customerId)?.credit_limit ?? '');
+  const [limitMsg, setLimitMsg] = useState('');
 
   const customer = getCustomer(customerId);
   const ledger = listCustomerLedger(customerId);
@@ -39,6 +41,18 @@ export default function CustomerLedger({ customerId, onBack, onChanged }) {
     await updateCustomer(customerId, { name: editName, phone: editPhone, address: editAddress });
     setEditing(false);
     onChanged();
+  }
+
+  async function handleSaveLimit(e) {
+    e.preventDefault();
+    setError(''); setLimitMsg('');
+    try {
+      await setCustomerCreditLimit(customerId, limitInput);
+      setLimitMsg(limitInput === '' ? 'Limit removed - this customer has no credit limit.' : 'Credit limit saved.');
+      onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   async function handleRecordPayment(e) {
@@ -94,6 +108,28 @@ export default function CustomerLedger({ customerId, onBack, onChanged }) {
           ? `Outstanding balance: ${formatMoney(customer.balance, currencyCode)}`
           : 'No outstanding balance.'}
       </p>
+
+      {!customer.is_walkin && (
+        <div className="credit-limit-box">
+          <p>
+            Credit limit:{' '}
+            <strong>{customer.credit_limit == null ? 'No limit' : formatMoney(customer.credit_limit, currencyCode)}</strong>
+            {customer.credit_limit != null && (
+              customer.balance > customer.credit_limit
+                ? <span className="setup-badge">over limit by {formatMoney(customer.balance - customer.credit_limit, currencyCode)}</span>
+                : <> · available {formatMoney(customer.credit_limit - customer.balance, currencyCode)}</>
+            )}
+          </p>
+          {isElevated(getCurrentUser()?.role) && (
+            <form onSubmit={handleSaveLimit} className="form-row">
+              <input type="number" min="0" step="0.01" placeholder="No limit" value={limitInput} onChange={(e) => setLimitInput(e.target.value)} />
+              <button type="submit" className="small-btn">Set credit limit</button>
+              <span className="modal-hint">Leave blank for no limit. Only an Owner or Admin can change this.</span>
+            </form>
+          )}
+          {limitMsg && <p className="saved-msg">{limitMsg}</p>}
+        </div>
+      )}
 
       {!customer.is_walkin && (
         <p className="loyalty-points-line">

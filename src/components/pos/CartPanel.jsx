@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { cartTotal, updateCartItemQuantity, removeCartItem, clearCart, completeSale } from '../../db/cart';
 import { listCustomers, ensureWalkInCustomer } from '../../db/customers';
 import { getCompanySettings } from '../../db/companySettings';
+import { getCurrentUser, isElevated } from '../../db/session';
 import { formatMoney } from '../../db/currency';
 import CustomerSelect from './CustomerSelect';
 import CartLineEditModal from './CartLineEditModal';
@@ -22,6 +23,7 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
   const [includeOutstanding, setIncludeOutstanding] = useState(true);
   const [amountPaid, setAmountPaid] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [creditBlocked, setCreditBlocked] = useState('');
 
   const total = cartTotal(items);
   const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
@@ -30,6 +32,8 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
   const applyOldBalance = !isWalkin && includeOutstanding && oldBalance > 0;
   const totalDue = total + (applyOldBalance ? oldBalance : 0);
   const company = getCompanySettings();
+  const creditLimit = !isWalkin ? (selectedCustomer?.credit_limit ?? null) : null;
+  const canApproveOverLimit = isElevated(getCurrentUser()?.role);
 
   useEffect(() => {
     (async () => {
@@ -85,8 +89,9 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
     onChanged();
   }
 
-  async function handleCompleteSale() {
+  async function handleCompleteSale(overrideCreditLimit = false) {
     setError('');
+    setCreditBlocked('');
     setCompleting(true);
     try {
       const saleId = await completeSale({
@@ -94,6 +99,7 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
         amountPaid: isWalkin ? null : Number(amountPaid),
         includeOutstanding: applyOldBalance,
         paymentMethod: isWalkin ? (paymentMethod === 'loyalty' ? 'cash' : paymentMethod) : paymentMethod,
+        overrideCreditLimit,
       });
       onChanged();
       await refreshCustomers();
@@ -103,7 +109,8 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
       setPaymentMethod('cash');
       onSaleCompleted(saleId);
     } catch (err) {
-      setError(err.message);
+      if (err.code === 'CREDIT_LIMIT_EXCEEDED') setCreditBlocked(err.message);
+      else setError(err.message);
     } finally {
       setCompleting(false);
     }
@@ -170,6 +177,18 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
       )}
 
       {error && <p className="modal-error">{error}</p>}
+      {creditBlocked && (
+        <div className="credit-block">
+          <p className="modal-error">{creditBlocked}</p>
+          {canApproveOverLimit ? (
+            <button type="button" className="small-btn" onClick={() => handleCompleteSale(true)} disabled={completing}>
+              Approve over the limit and complete sale
+            </button>
+          ) : (
+            <p className="modal-hint">Take a payment so the sale stays within the limit, or ask an Owner or Admin to approve it.</p>
+          )}
+        </div>
+      )}
 
       <div className="customer-fields">
         <CustomerSelect
@@ -232,6 +251,17 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
               {formatMoney(towardOldBalance, company.currency_code)} of this payment goes toward the previous balance first.
             </p>
           )}
+          {creditLimit != null && (() => {
+            const projected = oldBalance - towardOldBalance + saleOutstandingPreview;
+            const over = saleOutstandingPreview > 0.004 && projected > creditLimit + 0.005;
+            return (
+              <p className={over ? 'modal-error' : 'modal-hint'}>
+                Credit limit {formatMoney(creditLimit, company.currency_code)} · currently owes {formatMoney(oldBalance, company.currency_code)} ·
+                available {formatMoney(Math.max(0, creditLimit - oldBalance), company.currency_code)}
+                {over && ` — this sale would take them to ${formatMoney(projected, company.currency_code)}, over the limit.`}
+              </p>
+            );
+          })()}
           {notEnoughPoints && (
             <p className="modal-error">Not enough loyalty points for this amount.</p>
           )}
@@ -255,7 +285,7 @@ export default function CartPanel({ items, onChanged, onSaleCompleted }) {
         </button>
         <button
           className="small-btn complete-sale-btn"
-          onClick={handleCompleteSale}
+          onClick={() => handleCompleteSale(false)}
           disabled={items.length === 0 || completing || notEnoughPoints}
         >
           {completing ? 'Processing…' : 'Complete Sale'}

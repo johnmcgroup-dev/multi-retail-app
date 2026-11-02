@@ -5,7 +5,7 @@ import { getCurrentTenantId, getCurrentUser, getCurrentBranchId, canAccessPage }
 // Every product query selects these columns (NOT products.quantity, which is
 // a legacy column) plus a stock figure computed from branch_stock.
 export const PRODUCT_COLUMNS =
-  'p.id, p.tenant_id, p.name, p.barcode, p.sku, p.category_id, p.base_price, p.created_at, p.updated_at, p.deleted_at';
+  'p.id, p.tenant_id, p.name, p.barcode, p.sku, p.category_id, p.base_price, p.cost_price, p.created_at, p.updated_at, p.deleted_at';
 
 // SQL fragment giving a product's stock as `quantity`: at one branch when a
 // branch id is given, or summed over every branch when it is null.
@@ -35,6 +35,39 @@ export function stockChangeStatement(productId, branchId, tenantId, delta) {
   };
 }
 
+// What one base unit of a product currently costs at a branch: that branch's
+// weighted-average cost, else the product's own standard cost price, else
+// unknown (null).
+export function effectiveUnitCost(productId, branchId) {
+  const r = query(
+    `SELECT bs.avg_cost AS avg, p.cost_price AS std
+     FROM products p LEFT JOIN branch_stock bs ON bs.product_id = p.id AND bs.branch_id = ?
+     WHERE p.id = ?`,
+    [branchId, productId]
+  )[0];
+  if (!r) return null;
+  return r.avg ?? r.std ?? null;
+}
+
+// Adds stock that has a KNOWN cost (a delivery, or units transferred in) and
+// re-averages in SQL, so several lines for the same product inside one batch
+// each blend correctly. `unitCost` is per BASE unit; null means unknown, which
+// leaves the existing average untouched.
+export function stockReceiveStatement(productId, branchId, tenantId, qty, unitCost) {
+  return {
+    sql: `INSERT INTO branch_stock (product_id, branch_id, tenant_id, quantity, avg_cost) VALUES (?, ?, ?, ?, ?)
+          ON CONFLICT(product_id, branch_id) DO UPDATE SET
+            avg_cost = CASE
+              WHEN excluded.avg_cost IS NULL THEN branch_stock.avg_cost
+              WHEN branch_stock.quantity <= 0 THEN excluded.avg_cost
+              ELSE (COALESCE(branch_stock.avg_cost, (SELECT cost_price FROM products WHERE id = excluded.product_id), excluded.avg_cost) * branch_stock.quantity
+                    + excluded.avg_cost * excluded.quantity) / (branch_stock.quantity + excluded.quantity)
+            END,
+            quantity = branch_stock.quantity + excluded.quantity`,
+    params: [productId, branchId, tenantId, qty, unitCost],
+  };
+}
+
 export function getBranchStock(productId, branchId) {
   const rows = query(`SELECT quantity FROM branch_stock WHERE product_id = ? AND branch_id = ?`, [productId, branchId]);
   return rows[0]?.quantity || 0;
@@ -58,7 +91,7 @@ export async function setBranchStock(productId, branchId, quantity) {
 // One row per branch of the tenant (including 0-stock ones) for a product.
 export function listProductStockByBranch(productId) {
   return query(
-    `SELECT b.id AS branch_id, b.name AS branch_name, b.is_active, COALESCE(bs.quantity, 0) AS quantity
+    `SELECT b.id AS branch_id, b.name AS branch_name, b.is_active, COALESCE(bs.quantity, 0) AS quantity, bs.avg_cost
      FROM branches b LEFT JOIN branch_stock bs ON bs.branch_id = b.id AND bs.product_id = ?
      WHERE b.tenant_id = ? ORDER BY b.created_at ASC, b.rowid ASC`,
     [productId, getCurrentTenantId()]
@@ -116,7 +149,8 @@ export async function transferStock({ productId, fromBranchId, toBranchId, quant
 
   await runBatch([
     stockChangeStatement(productId, fromBranchId, tenantId, -qty),
-    stockChangeStatement(productId, toBranchId, tenantId, qty),
+    // the units arrive carrying the cost they had at the source branch
+    stockReceiveStatement(productId, toBranchId, tenantId, qty, effectiveUnitCost(productId, fromBranchId)),
     {
       sql: `INSERT INTO stock_transfers (id, tenant_id, product_id, from_branch_id, to_branch_id, quantity, note, created_by)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,

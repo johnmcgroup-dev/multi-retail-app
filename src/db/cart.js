@@ -11,9 +11,9 @@
 
 import { query, run, runBatch } from './database';
 import { newId } from './id';
-import { getCurrentTenantId, getCurrentBranchId, requireBranchId, getCurrentUser } from './session';
+import { getCurrentTenantId, getCurrentBranchId, requireBranchId, getCurrentUser, isElevated } from './session';
 import { getProduct } from './products';
-import { stockChangeStatement } from './stock';
+import { stockChangeStatement, effectiveUnitCost } from './stock';
 import {
   ensureWalkInCustomer,
   getCustomer,
@@ -201,6 +201,7 @@ export async function completeSale({
   amountPaid = null,
   includeOutstanding = false,
   paymentMethod = 'cash',
+  overrideCreditLimit = false,
 } = {}) {
   const branchId = requireBranchId();
   // This is the ONLY await before the commit (it may create the Walk-in
@@ -262,6 +263,29 @@ export async function completeSale({
     throw new Error('Walk-in Customer sales must be paid in full. Select a named customer to sell on credit.');
   }
 
+  // Credit limit: refuse a sale whose UNPAID part would take the customer's
+  // balance above their limit. A sale that adds no debt is always fine (even for
+  // someone already over their limit - they must be able to pay), and so is one
+  // that pays enough of the old balance to land at or under the limit. Only an
+  // Owner/Admin can approve going over, and the sale records who did.
+  let creditOverrideBy = null;
+  const projectedBalance = round2(customer.balance - paidTowardOldBalance + saleOutstanding);
+  if (!isWalkin && customer.credit_limit != null && saleOutstanding > 0 && projectedBalance > customer.credit_limit + 0.005) {
+    const approver = getCurrentUser();
+    if (overrideCreditLimit && approver && isElevated(approver.role)) {
+      creditOverrideBy = approver.id;
+    } else {
+      const err = new Error(
+        overrideCreditLimit
+          ? 'Only an Owner or Admin can approve a sale over the credit limit.'
+          : `Credit limit exceeded: ${customer.name} may owe up to ${formatMoney(customer.credit_limit, company.currency_code)}, ` +
+            `and this sale would take them to ${formatMoney(projectedBalance, company.currency_code)}.`
+      );
+      err.code = 'CREDIT_LIMIT_EXCEEDED';
+      throw err;
+    }
+  }
+
   // If paying with loyalty points, confirm the customer has enough BEFORE
   // writing anything, so a failed redemption never leaves a sale half-done.
   let pointsToRedeem = 0;
@@ -296,21 +320,28 @@ export async function completeSale({
   statements.push({
     sql: `INSERT INTO sales
             (id, tenant_id, branch_id, total, amount_paid, previous_balance_paid, payment_method, loyalty_points_earned,
-             customer_id, customer_name, customer_phone)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             customer_id, customer_name, customer_phone, credit_override_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       saleId, tenantId, branchId, saleTotal, paidTowardSale, paidTowardOldBalance, paymentMethod, pointsEarned,
-      resolvedCustomerId, customer.name || null, customer.phone || null,
+      resolvedCustomerId, customer.name || null, customer.phone || null, creditOverrideBy,
     ],
   });
 
   for (const item of items) {
+    // Freeze what these goods cost us RIGHT NOW (per base unit, at this branch),
+    // so later purchases or price changes never rewrite this sale's profit.
+    // No cost on record = flagged unknown rather than silently counted as free.
+    const unitCost = effectiveUnitCost(item.product_id, branchId);
+    const baseUnits = item.base_units_per_item * item.quantity;
     statements.push({
       sql: `INSERT INTO sale_items
-              (id, sale_id, product_id, variety_id, product_name, variety_name, unit_price, quantity, line_total)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (id, sale_id, product_id, variety_id, product_name, variety_name, unit_price, quantity, line_total,
+               cost_per_base_unit, line_cost, cost_known)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       params: [newId('si'), saleId, item.product_id, item.variety_id, item.product_name, item.variety_name,
-        item.unit_price, item.quantity, item.unit_price * item.quantity],
+        item.unit_price, item.quantity, item.unit_price * item.quantity,
+        unitCost, unitCost == null ? 0 : unitCost * baseUnits, unitCost == null ? 0 : 1],
     });
   }
 

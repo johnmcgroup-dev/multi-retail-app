@@ -9,13 +9,14 @@ export default function ProductEditForm({ product, categories, onSaved, onCancel
   const [categoryId, setCategoryId] = useState(product.category_id || '');
   const [quantity, setQuantity] = useState(product.quantity);
   const [basePrice, setBasePrice] = useState(product.base_price);
+  const [costPrice, setCostPrice] = useState(product.cost_price ?? '');
   const [saving, setSaving] = useState(false);
   const branchSelected = !!getCurrentBranchId();
 
   async function handleSave(e) {
     e.preventDefault();
     setSaving(true);
-    await updateProduct(product.id, { name, barcode, sku, categoryId, quantity, base_price: basePrice });
+    await updateProduct(product.id, { name, barcode, sku, categoryId, quantity, base_price: basePrice, cost_price: costPrice });
     setSaving(false);
     onSaved();
   }
@@ -36,7 +37,11 @@ export default function ProductEditForm({ product, categories, onSaved, onCancel
           onChange={(e) => setQuantity(e.target.value)}
         />
         <input placeholder="Base Price" type="number" step="0.01" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} />
+        <input placeholder="Cost price / Piece" type="number" step="0.01" min="0" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
       </div>
+      <p className="modal-hint">
+        Cost price is what one Piece costs you. It is used for profit figures until purchase orders give a real average cost.
+      </p>
       <p className="modal-hint">
         {branchSelected
           ? 'Stock Qty here sets the stock of the branch you are working in (other branches are unchanged). Use Add Stock or Stock Transfers for tracked changes.'

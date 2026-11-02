@@ -1,6 +1,7 @@
 import { query, run, runBatch } from './database';
 import { newId } from './id';
-import { getCurrentTenantId, getCurrentBranchId, getDefaultBranchId } from './session';
+import { getCurrentTenantId, getCurrentBranchId, getDefaultBranchId, getCurrentUser, isElevated } from './session';
+import { getCompanySettings } from './companySettings';
 
 const WALKIN_NAME = 'Walk-in Customer';
 
@@ -47,8 +48,9 @@ export function getCustomer(id) {
 export async function addCustomer({ name, phone, address }) {
   const id = newId('cust');
   await run(
-    `INSERT INTO customers (id, tenant_id, name, phone, address, is_walkin, balance) VALUES (?, ?, ?, ?, ?, 0, 0)`,
-    [id, getCurrentTenantId(), name, phone || null, address || null]
+    `INSERT INTO customers (id, tenant_id, name, phone, address, is_walkin, balance, credit_limit) VALUES (?, ?, ?, ?, ?, 0, 0, ?)`,
+    // a new customer starts with the business's default credit limit, if one is set
+    [id, getCurrentTenantId(), name, phone || null, address || null, getCompanySettings().default_credit_limit ?? null]
   );
   return id;
 }
@@ -145,4 +147,22 @@ export function listLoyaltyLedger(customerId) {
     `SELECT * FROM loyalty_ledger WHERE customer_id = ? ORDER BY created_at ASC, rowid ASC`,
     [customerId]
   );
+}
+
+// Sets how much a customer may owe at most. Blank/null = no limit. Only an
+// Owner or Admin can change it - a cashier or manager must not be able to
+// raise the limit of the customer they are serving.
+export async function setCustomerCreditLimit(customerId, limit) {
+  const user = getCurrentUser();
+  if (!user || !isElevated(user.role)) throw new Error('Only an Owner or Admin can change a credit limit.');
+  const customer = getCustomer(customerId);
+  if (!customer || customer.tenant_id !== getCurrentTenantId()) throw new Error('Customer not found.');
+  if (customer.is_walkin) throw new Error('The Walk-in Customer cannot buy on credit.');
+
+  let value = null;
+  if (limit !== '' && limit !== null && limit !== undefined) {
+    value = Number(limit);
+    if (!(value >= 0)) throw new Error('Credit limit cannot be negative.');
+  }
+  await run(`UPDATE customers SET credit_limit = ? WHERE id = ? AND tenant_id = ?`, [value, customerId, getCurrentTenantId()]);
 }

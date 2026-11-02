@@ -46,6 +46,7 @@ export default function ProductDetail({ productId, onBack }) {
           <p className="product-meta">
             Category: {product.category_name || '—'} · Barcode: {product.barcode || '—'} · SKU: {product.sku || '—'}
             {' · '}{stockLabel}: {product.quantity} · Base Price: {formatMoney(product.base_price, currencyCode)}
+            {' · '}Cost price: {product.cost_price == null ? '—' : formatMoney(product.cost_price, currencyCode)}
           </p>
         </>
       )}
@@ -54,12 +55,14 @@ export default function ProductDetail({ productId, onBack }) {
         <div className="variety-editor">
           <h3>Stock by Branch</h3>
           <table className="variety-table">
-            <thead><tr><th>Branch</th><th>Units in stock</th></tr></thead>
+            <thead><tr><th>Branch</th><th>Units in stock</th><th>Avg cost / piece</th><th>Value at cost</th></tr></thead>
             <tbody>
               {listProductStockByBranch(productId).map((r) => (
                 <tr key={r.branch_id}>
                   <td>{r.branch_name}{r.is_active ? '' : ' (inactive)'}</td>
                   <td>{r.quantity}</td>
+                  <td>{(r.avg_cost ?? product.cost_price) == null ? '—' : formatMoney(r.avg_cost ?? product.cost_price, currencyCode)}</td>
+                  <td>{(r.avg_cost ?? product.cost_price) == null ? '—' : formatMoney(r.quantity * (r.avg_cost ?? product.cost_price), currencyCode)}</td>
                 </tr>
               ))}
             </tbody>

@@ -3,7 +3,7 @@ import { newId } from './id';
 import {
   getCurrentTenantId, getCurrentUser, getCurrentBranchId, getDefaultBranchId, branchFilter, canAccessPage,
 } from './session';
-import { stockChangeStatement } from './stock';
+import { stockReceiveStatement } from './stock';
 import { getCompanySettings } from './companySettings';
 import { formatMoney } from './currency';
 
@@ -247,7 +247,7 @@ export async function receivePurchaseOrder(id, { lines, paidNow = 0, paymentMeth
     itemStatements.push(
       { sql: `UPDATE purchase_order_items SET quantity_received = quantity_received + ? WHERE id = ?`, params: [qty, item.id] },
       { sql: `INSERT INTO purchase_receipt_items (id, receipt_id, purchase_order_item_id, quantity_received) VALUES (?, ?, ?, ?)`, params: [newId('rci'), receiptId, item.id, qty] },
-      stockChangeStatement(item.product_id, po.branch_id, tenantId, qty * item.units_per_unit),
+      stockReceiveStatement(item.product_id, po.branch_id, tenantId, qty * item.units_per_unit, item.unit_cost / item.units_per_unit),
       {
         sql: `INSERT INTO stock_adjustments (id, tenant_id, product_id, branch_id, quantity_added, note) VALUES (?, ?, ?, ?, ?, ?)`,
         params: [newId('adj'), tenantId, item.product_id, po.branch_id, qty * item.units_per_unit, `Received on ${po.po_number}`],

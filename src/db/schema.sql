@@ -28,6 +28,18 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL UNIQUE,
   role TEXT NOT NULL CHECK (role IN ('super_admin','owner','admin','manager','cashier')),
   status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','invited','suspended')),
+  email_verified INTEGER NOT NULL DEFAULT 0, -- must be 1 before the person can log in
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- EMAIL VERIFICATIONS: one-time codes sent to a new user's email address.
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id),
+  code TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  used_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -65,6 +77,7 @@ CREATE TABLE IF NOT EXISTS products (
   category_id TEXT REFERENCES categories(id),
   quantity REAL NOT NULL DEFAULT 0,  -- base stock quantity (in "Piece" units)
   base_price REAL NOT NULL DEFAULT 0,
+  cost_price REAL,  -- optional standard cost per base (Piece) unit, used until purchases give a real average
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   deleted_at TEXT  -- soft delete, needed later for sync conflict handling
@@ -113,6 +126,7 @@ CREATE TABLE IF NOT EXISTS customers (
   is_walkin INTEGER NOT NULL DEFAULT 0,
   balance REAL NOT NULL DEFAULT 0,        -- positive = customer owes the company
   loyalty_points INTEGER NOT NULL DEFAULT 0,
+  credit_limit REAL,                      -- most this customer may owe; NULL = no limit
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -157,6 +171,7 @@ CREATE TABLE IF NOT EXISTS sales (
   loyalty_points_earned INTEGER NOT NULL DEFAULT 0,
   branch_id TEXT REFERENCES branches(id),
   customer_id TEXT REFERENCES customers(id),
+  credit_override_by TEXT REFERENCES users(id), -- set when an Owner/Admin approved this sale over the customer's credit limit
   customer_name TEXT,   -- snapshot at time of sale, so invoices stay stable
   customer_phone TEXT,  -- even if the customer record is edited later
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -172,7 +187,8 @@ CREATE TABLE IF NOT EXISTS company_settings (
   email TEXT NOT NULL DEFAULT '',
   points_per_amount REAL NOT NULL DEFAULT 0.1,   -- points earned per 1 unit of currency paid
   points_redeem_value REAL NOT NULL DEFAULT 1.0, -- currency value of 1 point when redeeming
-  currency_code TEXT NOT NULL DEFAULT 'USD'
+  currency_code TEXT NOT NULL DEFAULT 'USD',
+  default_credit_limit REAL               -- credit limit given to each NEW customer; NULL = none
 );
 
 -- SALE ITEMS: a frozen snapshot of each cart line at the moment of sale
@@ -185,7 +201,10 @@ CREATE TABLE IF NOT EXISTS sale_items (
   variety_name TEXT NOT NULL,
   unit_price REAL NOT NULL,
   quantity REAL NOT NULL,
-  line_total REAL NOT NULL
+  line_total REAL NOT NULL,
+  cost_per_base_unit REAL,                 -- cost of one base unit at the moment of sale
+  line_cost REAL,                          -- what the goods on this line cost us
+  cost_known INTEGER NOT NULL DEFAULT 0    -- 0 = no cost was available, so profit on it is unknown
 );
 
 -- EXPENSE CATEGORIES
@@ -230,6 +249,7 @@ CREATE TABLE IF NOT EXISTS branch_stock (
   branch_id TEXT NOT NULL REFERENCES branches(id),
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   quantity REAL NOT NULL DEFAULT 0,
+  avg_cost REAL,  -- weighted-average cost per base unit at THIS branch; NULL = not known yet
   PRIMARY KEY (product_id, branch_id)
 );
 

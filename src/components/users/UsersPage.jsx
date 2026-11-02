@@ -134,7 +134,9 @@ export default function UsersPage() {
                   </select>
                 ) : 'All branches'}
               </td>
-              <td className={u.status === 'suspended' ? 'balance-owing' : 'balance-clear'}>{u.status}</td>
+              <td className={u.status === 'suspended' ? 'balance-owing' : u.email_verified ? 'balance-clear' : ''}>
+                {u.status === 'suspended' ? 'suspended' : u.email_verified ? 'active' : 'awaiting email verification'}
+              </td>
               <td>
                 {u.role !== 'owner' && (
                   <button className="link-btn" onClick={() => handleToggleStatus(u)}>

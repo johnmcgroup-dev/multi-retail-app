@@ -67,6 +67,8 @@ export default function CustomersPage() {
             <th>Name</th>
             <th>Phone</th>
             <th>Outstanding Balance</th>
+            <th>Credit limit</th>
+            <th>Available credit</th>
             <th></th>
           </tr>
         </thead>
@@ -79,6 +81,12 @@ export default function CustomersPage() {
               </td>
               <td>{c.phone || '—'}</td>
               <td className={c.balance > 0 ? 'balance-owing' : ''}>{formatMoney(c.balance, currencyCode)}</td>
+              <td>{c.is_walkin ? '—' : c.credit_limit == null ? 'No limit' : formatMoney(c.credit_limit, currencyCode)}</td>
+              <td>
+                {c.is_walkin || c.credit_limit == null ? '—' : c.balance > c.credit_limit
+                  ? <span className="setup-badge">over limit</span>
+                  : formatMoney(c.credit_limit - c.balance, currencyCode)}
+              </td>
               <td>
                 <button className="link-btn name-link" onClick={() => setOpenCustomerId(c.id)}>
                   View Ledger

@@ -1,5 +1,8 @@
 import { useState } from 'react';
-import { loginByEmail, signUpAsNewTenantOwner, joinWithInviteCode, hasUnclaimedLegacyData } from '../../db/users';
+import {
+  loginByEmail, signUpAsNewTenantOwner, joinWithInviteCode, hasUnclaimedLegacyData, resendVerificationCode,
+} from '../../db/users';
+import VerifyEmailScreen from './VerifyEmailScreen';
 
 const MODES = [
   { key: 'login', label: 'Log In' },
@@ -11,6 +14,7 @@ export default function AuthScreen({ onDone }) {
   const [mode, setMode] = useState('login');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [pending, setPending] = useState(null); // { email, devCode } while waiting for email verification
 
   // shared fields
   const [email, setEmail] = useState('');
@@ -27,17 +31,35 @@ export default function AuthScreen({ onDone }) {
     try {
       if (mode === 'login') {
         await loginByEmail(email);
+        onDone();
       } else if (mode === 'signup') {
-        await signUpAsNewTenantOwner({ tenantName, name, email });
+        const r = await signUpAsNewTenantOwner({ tenantName, name, email });
+        setPending({ email, devCode: r.devCode });
       } else if (mode === 'join') {
-        await joinWithInviteCode({ code, name, email });
+        const r = await joinWithInviteCode({ code, name, email });
+        setPending({ email, devCode: r.devCode });
       }
-      onDone();
     } catch (err) {
-      setError(err.message);
+      if (err.code === 'EMAIL_NOT_VERIFIED') {
+        // The account exists but was never confirmed: send a fresh code and ask for it.
+        setPending({ email, devCode: await resendVerificationCode(email) });
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  if (pending) {
+    return (
+      <VerifyEmailScreen
+        email={pending.email}
+        devCode={pending.devCode}
+        onVerified={onDone}
+        onBack={() => setPending(null)}
+      />
+    );
   }
 
   return (
@@ -74,6 +96,7 @@ export default function AuthScreen({ onDone }) {
             <>
               <p className="modal-hint">
                 Signing up without an invite code creates a brand new business (tenant), with you as Owner.
+                You will be asked to verify your email address before you can log in.
               </p>
               {hasUnclaimedLegacyData() && (
                 <p className="modal-hint legacy-data-notice">
@@ -95,7 +118,8 @@ export default function AuthScreen({ onDone }) {
             <>
               <p className="modal-hint">
                 Using an invite code joins the business (tenant) and role that code was created for -
-                you never choose or type a tenant yourself.
+                you never choose or type a tenant yourself. You will be asked to verify your email address
+                before you can log in.
               </p>
               <label className="modal-label">Invite Code</label>
               <input className="modal-input" placeholder="XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} required />

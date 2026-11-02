@@ -77,7 +77,33 @@ function backfillBranches() {
   );
 }
 
+// Branches that already received goods on a purchase order but have no average
+// cost yet get one worked out from those deliveries. Only fills gaps, so it is
+// safe to run every startup.
+function backfillAverageCosts() {
+  runUnsaved(
+    `UPDATE branch_stock SET avg_cost = (
+       SELECT SUM(ri.quantity_received * i.unit_cost) / SUM(ri.quantity_received * i.units_per_unit)
+       FROM purchase_receipt_items ri
+       JOIN purchase_order_items i ON i.id = ri.purchase_order_item_id
+       JOIN purchase_receipts r ON r.id = ri.receipt_id
+       WHERE i.product_id = branch_stock.product_id AND r.branch_id = branch_stock.branch_id)
+     WHERE avg_cost IS NULL AND EXISTS (
+       SELECT 1 FROM purchase_receipt_items ri
+       JOIN purchase_order_items i ON i.id = ri.purchase_order_item_id
+       JOIN purchase_receipts r ON r.id = ri.receipt_id
+       WHERE i.product_id = branch_stock.product_id AND r.branch_id = branch_stock.branch_id)`
+  );
+}
+
 export async function runMigrations() {
+  // Email verification: accounts that already existed before this column was
+  // introduced are treated as verified, so nobody is locked out by the upgrade.
+  if (tableExists('users') && !columnExists('users', 'email_verified')) {
+    await run(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`);
+    await run(`UPDATE users SET email_verified = 1`);
+  }
+
   // Module 4: invoicing - customer snapshot fields on sales
   await addColumnIfMissing('sales', 'customer_name', 'TEXT');
   await addColumnIfMissing('sales', 'customer_phone', 'TEXT');
@@ -106,5 +132,18 @@ export async function runMigrations() {
   await addColumnIfMissing('cart_items', 'user_id', 'TEXT');
   await addColumnIfMissing('customer_ledger', 'branch_id', 'TEXT');
 
+  // Profit reporting: product costs, per-branch average cost, cost frozen on each sale line
+  await addColumnIfMissing('products', 'cost_price', 'REAL');
+  await addColumnIfMissing('branch_stock', 'avg_cost', 'REAL');
+  await addColumnIfMissing('sale_items', 'cost_per_base_unit', 'REAL');
+  await addColumnIfMissing('sale_items', 'line_cost', 'REAL');
+  await addColumnIfMissing('sale_items', 'cost_known', 'INTEGER NOT NULL DEFAULT 0');
+
+  // Customer credit limits (NULL = no limit, so existing customers behave exactly as before)
+  await addColumnIfMissing('customers', 'credit_limit', 'REAL');
+  await addColumnIfMissing('company_settings', 'default_credit_limit', 'REAL');
+  await addColumnIfMissing('sales', 'credit_override_by', 'TEXT');
+
   backfillBranches();
+  backfillAverageCosts();
 }

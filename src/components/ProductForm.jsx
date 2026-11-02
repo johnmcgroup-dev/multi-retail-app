@@ -7,14 +7,15 @@ export default function ProductForm({ categories, onAdd, stockEnabled = true }) 
   const [categoryId, setCategoryId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [price, setPrice] = useState('');
+  const [costPrice, setCostPrice] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
     if (!name.trim()) return;
     setSaving(true);
-    await onAdd({ name: name.trim(), barcode, sku, categoryId, quantity, base_price: price });
-    setName(''); setBarcode(''); setSku(''); setCategoryId(''); setQuantity(''); setPrice('');
+    await onAdd({ name: name.trim(), barcode, sku, categoryId, quantity, base_price: price, cost_price: costPrice });
+    setName(''); setBarcode(''); setSku(''); setCategoryId(''); setQuantity(''); setPrice(''); setCostPrice('');
     setSaving(false);
   }
 
@@ -37,6 +38,7 @@ export default function ProductForm({ categories, onAdd, stockEnabled = true }) 
           onChange={(e) => setQuantity(e.target.value)}
         />
         <input placeholder="Base Price" type="number" step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+        <input placeholder="Cost price / Piece (optional)" type="number" step="0.01" min="0" value={costPrice} onChange={(e) => setCostPrice(e.target.value)} />
         <button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Add Product'}</button>
       </div>
       {!stockEnabled && (

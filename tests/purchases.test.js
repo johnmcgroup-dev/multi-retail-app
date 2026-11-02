@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initDatabase, query, run } from '../src/db/database';
-import { createSuperAdmin, signUpAsNewTenantOwner, loginByEmail, createInviteCode, joinWithInviteCode } from '../src/db/users';
+import { createSuperAdmin, loginByEmail, createInviteCode } from '../src/db/users';
+import { signUpVerified, joinVerified } from './helpers';
 import { listBranches, addBranch } from '../src/db/branches';
 import { addProduct, getProduct } from '../src/db/products';
 import { listVarietiesForProduct, updateParentVariety } from '../src/db/varieties';
@@ -34,7 +35,7 @@ function snapshot() {
 beforeAll(async () => {
   await initDatabase();
   await createSuperAdmin({ name: 'Dev', email: 'dev@x.com' });
-  A = await signUpAsNewTenantOwner({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
+  A = await signUpVerified({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
   mainA = listBranches()[0];
   const id = await addBranch('Lekki');
   lekki = listBranches().find((b) => b.id === id);
@@ -172,14 +173,14 @@ describe('branches, roles and tenants', () => {
 
   it('a cashier cannot manage purchases; a Lekki manager only sees and orders for Lekki', async () => {
     const cCode = await createInviteCode({ tenantId: A.tenantId, role: 'cashier', branchId: lekki.id, createdByUserId: A.userId });
-    await joinWithInviteCode({ code: cCode, name: 'Chidi', email: 'chidi@a.com' });
+    await joinVerified({ code: cCode, name: 'Chidi', email: 'chidi@a.com' });
     await expect(createPurchaseOrder({ supplierId, orderDate: '2026-10-04', items: [{ productId, varietyId: piece.id, quantity: 1, unitCost: 1 }] }))
       .rejects.toThrow(/permission/);
     await expect(addSupplier({ name: 'Sneaky' })).rejects.toThrow(/permission/);
 
     await loginByEmail('alice@a.com');
     const mCode = await createInviteCode({ tenantId: A.tenantId, role: 'manager', branchId: lekki.id, createdByUserId: A.userId });
-    await joinWithInviteCode({ code: mCode, name: 'Lola', email: 'lola@a.com' });
+    await joinVerified({ code: mCode, name: 'Lola', email: 'lola@a.com' });
 
     expect(listPurchaseOrders()).toHaveLength(0); // Main's orders are invisible to her
     lekkiPo = await createPurchaseOrder({
@@ -210,7 +211,7 @@ describe('branches, roles and tenants', () => {
   });
 
   it('another business sees none of it and cannot touch it', async () => {
-    await signUpAsNewTenantOwner({ tenantName: 'Beta', name: 'Bob', email: 'bob@b.com' });
+    await signUpVerified({ tenantName: 'Beta', name: 'Bob', email: 'bob@b.com' });
     expect(listSuppliers()).toHaveLength(0);
     expect(listPurchaseOrders()).toHaveLength(0);
     expect(getPurchaseOrder(poId)).toBeNull();

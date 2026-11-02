@@ -35,13 +35,20 @@ export function getProduct(id) {
 // Creates a product AND its full set of varieties. The product itself is
 // shared by the whole tenant; any opening stock goes to the branch currently
 // selected (when viewing all branches, the product starts with no stock).
-export async function addProduct({ name, barcode, sku, categoryId, quantity, base_price }) {
+function toCost(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const n = Number(value);
+  if (!(n >= 0)) throw new Error('Cost price cannot be negative.');
+  return n;
+}
+
+export async function addProduct({ name, barcode, sku, categoryId, quantity, base_price, cost_price }) {
   const id = newId('prod');
   const branchId = getCurrentBranchId();
   await run(
-    `INSERT INTO products (id, tenant_id, name, barcode, sku, category_id, quantity, base_price)
-     VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
-    [id, getCurrentTenantId(), name, barcode || null, sku || null, categoryId || null, Number(base_price) || 0]
+    `INSERT INTO products (id, tenant_id, name, barcode, sku, category_id, quantity, base_price, cost_price)
+     VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    [id, getCurrentTenantId(), name, barcode || null, sku || null, categoryId || null, Number(base_price) || 0, toCost(cost_price)]
   );
   await createDefaultVarieties(id, Number(base_price) || 0);
   const openingStock = Number(quantity) || 0;
@@ -51,12 +58,12 @@ export async function addProduct({ name, barcode, sku, categoryId, quantity, bas
 
 // Stock is only edited when a specific branch is selected; the other fields
 // are shared catalog data.
-export async function updateProduct(id, { name, barcode, sku, categoryId, quantity, base_price }) {
+export async function updateProduct(id, { name, barcode, sku, categoryId, quantity, base_price, cost_price }) {
   await run(
     `UPDATE products
-       SET name = ?, barcode = ?, sku = ?, category_id = ?, base_price = ?, updated_at = datetime('now')
+       SET name = ?, barcode = ?, sku = ?, category_id = ?, base_price = ?, cost_price = ?, updated_at = datetime('now')
      WHERE id = ? AND tenant_id = ?`,
-    [name, barcode || null, sku || null, categoryId || null, Number(base_price) || 0, id, getCurrentTenantId()]
+    [name, barcode || null, sku || null, categoryId || null, Number(base_price) || 0, toCost(cost_price), id, getCurrentTenantId()]
   );
   const branchId = getCurrentBranchId();
   if (branchId && quantity !== undefined && quantity !== '') {

@@ -1,7 +1,98 @@
-import { query, run } from './database';
+import { query, run, runBatch } from './database';
 import { newId } from './id';
 import { setCurrentUserId, setViewingTenantId, getCurrentUser } from './session';
 import { ensureDefaultBranch } from './branches';
+import { sendVerificationEmail } from './emailService';
+
+// --- Email addresses ---
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)*\.[^\s@.]{2,}$/;
+
+export function normalizeEmail(email) {
+  return String(email || '').trim().toLowerCase();
+}
+
+// A basic format check: something@domain.tld. It stops typos and obvious junk
+// ("jargon", "a@b", "x y@z.com"). It cannot tell whether the address is REAL
+// or belongs to the person - that is what the verification code is for.
+export function isValidEmail(email) {
+  const e = String(email || '').trim();
+  return e.length <= 254 && EMAIL_PATTERN.test(e);
+}
+
+function assertValidEmail(email) {
+  if (!isValidEmail(email)) throw new Error('Enter a valid email address, like name@example.com.');
+}
+
+// --- Email verification ---
+// A new account cannot log in until its email address has been confirmed with
+// a one-time code. Codes last 15 minutes and allow 5 wrong attempts; asking
+// for a new code cancels the old one.
+const CODE_TTL_MINUTES = 15;
+const MAX_ATTEMPTS = 5;
+
+function generateVerificationCode() {
+  return String(crypto.getRandomValues(new Uint32Array(1))[0] % 1000000).padStart(6, '0');
+}
+
+async function issueVerificationCode(user) {
+  const code = generateVerificationCode();
+  await runBatch([
+    { sql: `UPDATE email_verifications SET used_at = datetime('now') WHERE user_id = ? AND used_at IS NULL`, params: [user.id] },
+    {
+      sql: `INSERT INTO email_verifications (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)`,
+      params: [newId('ver'), user.id, code, new Date(Date.now() + CODE_TTL_MINUTES * 60000).toISOString()],
+    },
+  ]);
+  const sent = await sendVerificationEmail({ email: user.email, code });
+  return sent.devCode || null; // only ever set while no real email can be sent
+}
+
+function logIn(user) {
+  setCurrentUserId(user.id);
+  // super_admin picks which tenant to look at next; everyone else is locked to theirs
+  if (user.role !== 'super_admin') setViewingTenantId(user.tenant_id);
+}
+
+// Confirms the code, marks the account verified and logs the person in.
+// Deliberately refuses an already-verified account: otherwise this function
+// would be a way to log in as anyone without any credential at all.
+export async function verifyEmail({ email, code }) {
+  const user = query(`SELECT * FROM users WHERE email = ?`, [normalizeEmail(email)])[0];
+  if (!user) throw new Error('No account found with that email.');
+  if (user.status === 'suspended') throw new Error('This account has been suspended.');
+  if (user.email_verified) throw new Error('This email is already verified. Please log in.');
+
+  const v = query(
+    `SELECT * FROM email_verifications WHERE user_id = ? AND used_at IS NULL ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    [user.id]
+  )[0];
+  if (!v) throw new Error('No verification code is pending. Please request a new one.');
+  if (new Date(v.expires_at).getTime() < Date.now()) throw new Error('This code has expired. Please request a new one.');
+  if (v.attempts >= MAX_ATTEMPTS) throw new Error('Too many incorrect attempts. Please request a new code.');
+
+  if (String(code || '').trim() !== v.code) {
+    await run(`UPDATE email_verifications SET attempts = attempts + 1 WHERE id = ?`, [v.id]);
+    const left = MAX_ATTEMPTS - (v.attempts + 1);
+    throw new Error(left > 0 ? `Incorrect code. ${left} attempt(s) left.` : 'Too many incorrect attempts. Please request a new code.');
+  }
+
+  await runBatch([
+    { sql: `UPDATE users SET email_verified = 1 WHERE id = ?`, params: [user.id] },
+    { sql: `UPDATE email_verifications SET used_at = datetime('now') WHERE id = ?`, params: [v.id] },
+  ]);
+  logIn(user);
+  return { ...user, email_verified: 1 };
+}
+
+// Sends a fresh code. Says nothing about whether the account exists or is
+// already verified (returns null either way), so it can't be used to probe
+// which emails are registered.
+export async function resendVerificationCode(email) {
+  const user = query(`SELECT * FROM users WHERE email = ?`, [normalizeEmail(email)])[0];
+  if (!user || user.email_verified || user.status === 'suspended') return null;
+  return issueVerificationCode(user);
+}
 
 // --- Super Admin bootstrap ---
 // The very first time this app runs anywhere with no users at all, it asks
@@ -15,10 +106,13 @@ export function superAdminExists() {
 
 export async function createSuperAdmin({ name, email }) {
   if (superAdminExists()) throw new Error('A Super Admin account already exists.');
+  assertValidEmail(email);
   const id = newId('user');
+  // The very first account is created by whoever is setting the system up, with
+  // nobody before them to verify against, so it starts verified.
   await run(
-    `INSERT INTO users (id, tenant_id, name, email, role, status) VALUES (?, NULL, ?, ?, 'super_admin', 'active')`,
-    [id, name, email.trim().toLowerCase()]
+    `INSERT INTO users (id, tenant_id, name, email, role, status, email_verified) VALUES (?, NULL, ?, ?, 'super_admin', 'active', 1)`,
+    [id, name, normalizeEmail(email)]
   );
   setCurrentUserId(id);
   return id;
@@ -58,7 +152,8 @@ export function hasUnclaimedLegacyData() {
 // (or adopts pre-existing legacy data the very first time, see above).
 // This is what happens when someone signs up WITHOUT an invite code.
 export async function signUpAsNewTenantOwner({ tenantName, name, email }) {
-  const existing = query(`SELECT id FROM users WHERE email = ?`, [email.trim().toLowerCase()]);
+  assertValidEmail(email);
+  const existing = query(`SELECT id FROM users WHERE email = ?`, [normalizeEmail(email)]);
   if (existing.length > 0) throw new Error('An account with this email already exists. Try logging in instead.');
 
   const legacyTenant = findUnclaimedLegacyTenant();
@@ -74,13 +169,13 @@ export async function signUpAsNewTenantOwner({ tenantName, name, email }) {
 
   const userId = newId('user');
   await run(
-    `INSERT INTO users (id, tenant_id, name, email, role, status) VALUES (?, ?, ?, ?, 'owner', 'active')`,
-    [userId, tenantId, name, email.trim().toLowerCase()]
+    `INSERT INTO users (id, tenant_id, name, email, role, status, email_verified) VALUES (?, ?, ?, ?, 'owner', 'active', 0)`,
+    [userId, tenantId, name, normalizeEmail(email)]
   );
 
-  setCurrentUserId(userId);
-  setViewingTenantId(tenantId);
-  return { tenantId, userId, adoptedExistingData: !!legacyTenant };
+  // Not logged in yet: the email must be verified first.
+  const devCode = await issueVerificationCode({ id: userId, email: normalizeEmail(email) });
+  return { tenantId, userId, adoptedExistingData: !!legacyTenant, verificationRequired: true, devCode };
 }
 
 // --- Invite codes: generated by an Owner/Admin, used by a new staff sign-up ---
@@ -130,38 +225,38 @@ export async function joinWithInviteCode({ code, name, email }) {
   if (invite.revoked) throw new Error('This invite code has been revoked.');
   if (invite.used_by) throw new Error('This invite code has already been used.');
 
-  const existing = query(`SELECT id FROM users WHERE email = ?`, [email.trim().toLowerCase()]);
+  assertValidEmail(email);
+  const existing = query(`SELECT id FROM users WHERE email = ?`, [normalizeEmail(email)]);
   if (existing.length > 0) throw new Error('An account with this email already exists. Try logging in instead.');
 
   const userId = newId('user');
   await run(
-    `INSERT INTO users (id, tenant_id, branch_id, name, email, role, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'active')`,
-    [userId, invite.tenant_id, invite.branch_id, name, email.trim().toLowerCase(), invite.role]
+    `INSERT INTO users (id, tenant_id, branch_id, name, email, role, status, email_verified)
+     VALUES (?, ?, ?, ?, ?, ?, 'active', 0)`,
+    [userId, invite.tenant_id, invite.branch_id, name, normalizeEmail(email), invite.role]
   );
   await run(`UPDATE invite_codes SET used_by = ?, used_at = datetime('now') WHERE id = ?`, [userId, invite.id]);
 
-  setCurrentUserId(userId);
-  setViewingTenantId(invite.tenant_id);
-  return userId;
+  // Not logged in yet: the email must be verified first.
+  const devCode = await issueVerificationCode({ id: userId, email: normalizeEmail(email) });
+  return { userId, verificationRequired: true, devCode };
 }
 
 // --- Login: no real password system yet, so this matches purely by email -
 // a clearly-labeled placeholder on the Login screen explains this plainly,
 // so it's never mistaken for real security.
 export async function loginByEmail(email) {
-  const rows = query(`SELECT * FROM users WHERE email = ?`, [email.trim().toLowerCase()]);
+  const rows = query(`SELECT * FROM users WHERE email = ?`, [normalizeEmail(email)]);
   const user = rows[0];
   if (!user) throw new Error('No account found with that email.');
   if (user.status === 'suspended') throw new Error('This account has been suspended.');
-
-  setCurrentUserId(user.id);
-  if (user.role === 'super_admin') {
-    // super_admin needs to explicitly choose which tenant to view; leave
-    // viewing tenant unset so the UI prompts a tenant picker next.
-  } else {
-    setViewingTenantId(user.tenant_id);
+  if (!user.email_verified) {
+    const err = new Error('Please verify your email address before logging in.');
+    err.code = 'EMAIL_NOT_VERIFIED';
+    throw err;
   }
+
+  logIn(user);
   return user;
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initDatabase, query, run } from '../src/db/database';
-import { createSuperAdmin, signUpAsNewTenantOwner } from '../src/db/users';
+import { createSuperAdmin } from '../src/db/users';
+import { signUpVerified } from './helpers';
 import { addProduct, getProduct } from '../src/db/products';
 import { addCustomer, getCustomer, recordPayment } from '../src/db/customers';
 import { addToCart, completeSale, listCart, clearCart } from '../src/db/cart';
@@ -30,7 +31,7 @@ function snapshot() {
 beforeAll(async () => {
   await initDatabase();
   await createSuperAdmin({ name: 'Dev', email: 'dev@x.com' });
-  await signUpAsNewTenantOwner({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
+  await signUpVerified({ tenantName: 'Acme', name: 'Alice', email: 'alice@a.com' });
   productId = await addProduct({ name: 'Rice', quantity: 20, base_price: 100 });
   jane = await addCustomer({ name: 'Jane', phone: '080' });
 });
