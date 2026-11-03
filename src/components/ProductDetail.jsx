@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getProduct } from '../db/products';
+import { getProduct, listStockAdjustments } from '../db/products';
 import { listCategories } from '../db/categories';
 import { getCompanySettings } from '../db/companySettings';
 import { formatMoney } from '../db/currency';
@@ -14,6 +14,7 @@ export default function ProductDetail({ productId, onBack }) {
   const categories = listCategories();
   const currencyCode = getCompanySettings().currency_code;
   const user = getCurrentUser();
+  const stockHistory = listStockAdjustments(productId);
 
   if (!product) {
     return (
@@ -69,6 +70,28 @@ export default function ProductDetail({ productId, onBack }) {
           </table>
         </div>
       )}
+
+      <div className="variety-editor">
+        <h3>Stock Additions</h3>
+        {stockHistory.length === 0 ? (
+          <p className="empty-state">No stock additions recorded yet.</p>
+        ) : (
+          <table className="variety-table">
+            <thead><tr><th>Date</th><th>Branch</th><th>Units added</th><th>By</th><th>Note</th></tr></thead>
+            <tbody>
+              {stockHistory.map((h) => (
+                <tr key={h.id}>
+                  <td>{new Date(h.created_at).toLocaleString()}</td>
+                  <td>{h.branch_name || '—'}</td>
+                  <td>{h.quantity_added}</td>
+                  <td>{h.created_by_name || '—'}</td>
+                  <td>{h.note || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
 
       <VarietyEditor productId={productId} />
     </div>

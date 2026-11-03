@@ -64,8 +64,9 @@ export async function updateSupplier(id, { name, phone, address }) {
 export function listSupplierLedger(supplierId) {
   if (!getSupplier(supplierId)) return [];
   return query(
-    `SELECT l.*, po.po_number FROM supplier_ledger l
+    `SELECT l.*, po.po_number, u.name AS created_by_name FROM supplier_ledger l
      LEFT JOIN purchase_orders po ON po.id = l.purchase_order_id
+     LEFT JOIN users u ON u.id = l.created_by
      WHERE l.supplier_id = ? AND l.tenant_id = ? ORDER BY l.created_at ASC, l.rowid ASC`,
     [supplierId, getCurrentTenantId()]
   );
@@ -82,9 +83,9 @@ function supplierLedgerStatements({ supplierId, balanceBefore, type, amount, not
     statements: [
       { sql: `UPDATE suppliers SET balance = ROUND(balance + ?, 2) WHERE id = ? AND tenant_id = ?`, params: [delta, supplierId, tenantId] },
       {
-        sql: `INSERT INTO supplier_ledger (id, tenant_id, branch_id, supplier_id, purchase_order_id, type, amount, balance_after, payment_method, note)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        params: [newId('sled'), tenantId, branchId, supplierId, purchaseOrderId, type, amount, balanceAfter, paymentMethod, note || null],
+        sql: `INSERT INTO supplier_ledger (id, tenant_id, branch_id, supplier_id, purchase_order_id, type, amount, balance_after, payment_method, note, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        params: [newId('sled'), tenantId, branchId, supplierId, purchaseOrderId, type, amount, balanceAfter, paymentMethod, note || null, getCurrentUser()?.id ?? null],
       },
     ],
   };
@@ -183,10 +184,11 @@ export function listPurchaseOrders({ status = null } = {}) {
 export function getPurchaseOrder(id) {
   const bf = branchFilter('po.branch_id');
   const po = query(
-    `SELECT po.*, s.name AS supplier_name, b.name AS branch_name
+    `SELECT po.*, s.name AS supplier_name, b.name AS branch_name, cu.name AS created_by_name
      FROM purchase_orders po
      JOIN suppliers s ON s.id = po.supplier_id
      LEFT JOIN branches b ON b.id = po.branch_id
+     LEFT JOIN users cu ON cu.id = po.created_by
      WHERE po.id = ? AND po.tenant_id = ?${bf.sql}`,
     [id, getCurrentTenantId(), ...bf.params]
   )[0];
@@ -249,8 +251,8 @@ export async function receivePurchaseOrder(id, { lines, paidNow = 0, paymentMeth
       { sql: `INSERT INTO purchase_receipt_items (id, receipt_id, purchase_order_item_id, quantity_received) VALUES (?, ?, ?, ?)`, params: [newId('rci'), receiptId, item.id, qty] },
       stockReceiveStatement(item.product_id, po.branch_id, tenantId, qty * item.units_per_unit, item.unit_cost / item.units_per_unit),
       {
-        sql: `INSERT INTO stock_adjustments (id, tenant_id, product_id, branch_id, quantity_added, note) VALUES (?, ?, ?, ?, ?, ?)`,
-        params: [newId('adj'), tenantId, item.product_id, po.branch_id, qty * item.units_per_unit, `Received on ${po.po_number}`],
+        sql: `INSERT INTO stock_adjustments (id, tenant_id, product_id, branch_id, quantity_added, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        params: [newId('adj'), tenantId, item.product_id, po.branch_id, qty * item.units_per_unit, `Received on ${po.po_number}`, user.id],
       }
     );
   }

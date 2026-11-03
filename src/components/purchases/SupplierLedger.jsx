@@ -91,7 +91,7 @@ export default function SupplierLedger({ supplierId, onBack }) {
         <p className="empty-state">No activity yet.</p>
       ) : (
         <table className="product-table">
-          <thead><tr><th>Date</th><th>Type</th><th>Order</th><th>Method</th><th>Note</th><th>Amount</th><th>Owed After</th></tr></thead>
+          <thead><tr><th>Date</th><th>Type</th><th>Order</th><th>Method</th><th>Note</th><th>By</th><th>Amount</th><th>Owed After</th></tr></thead>
           <tbody>
             {ledger.map((l) => (
               <tr key={l.id}>
@@ -100,6 +100,7 @@ export default function SupplierLedger({ supplierId, onBack }) {
                 <td>{l.po_number || '—'}</td>
                 <td>{l.payment_method || '—'}</td>
                 <td>{l.note || '—'}</td>
+                <td>{l.created_by_name || '—'}</td>
                 <td className={l.type === 'payment' ? 'ledger-credit' : 'ledger-debit'}>
                   {l.type === 'payment' ? '-' : '+'}{money(l.amount)}
                 </td>

@@ -7,8 +7,8 @@ import { getCurrentTenantId, branchFilter } from './session';
 export function listSales() {
   const bf = branchFilter('s.branch_id');
   return query(
-    `SELECT s.*, b.name AS branch_name
-     FROM sales s LEFT JOIN branches b ON b.id = s.branch_id
+    `SELECT s.*, b.name AS branch_name, u.name AS served_by_name
+     FROM sales s LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN users u ON u.id = s.created_by
      WHERE s.tenant_id = ?${bf.sql}
      ORDER BY s.created_at DESC, s.rowid DESC`,
     [getCurrentTenantId(), ...bf.params]
@@ -18,8 +18,8 @@ export function listSales() {
 export function getSale(saleId) {
   const bf = branchFilter('s.branch_id');
   const rows = query(
-    `SELECT s.*, b.name AS branch_name
-     FROM sales s LEFT JOIN branches b ON b.id = s.branch_id
+    `SELECT s.*, b.name AS branch_name, u.name AS served_by_name
+     FROM sales s LEFT JOIN branches b ON b.id = s.branch_id LEFT JOIN users u ON u.id = s.created_by
      WHERE s.id = ? AND s.tenant_id = ?${bf.sql}`,
     [saleId, getCurrentTenantId(), ...bf.params]
   );

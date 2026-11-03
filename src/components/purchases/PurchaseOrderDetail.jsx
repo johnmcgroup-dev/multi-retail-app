@@ -75,7 +75,7 @@ export default function PurchaseOrderDetail({ poId, onBack }) {
         <div>
           <h2>{po.po_number} <span className={`status-badge status-${po.status}`}>{STATUS_LABELS[po.status]}</span></h2>
           <p className="product-meta">
-            Supplier: {po.supplier_name} · Branch: {po.branch_name} · Ordered {po.order_date}
+            Supplier: {po.supplier_name} · Branch: {po.branch_name} · Ordered {po.order_date}{po.created_by_name ? ` by ${po.created_by_name}` : ''}
             {po.expected_date ? ` · Expected ${po.expected_date}` : ''}
           </p>
           {po.note && <p className="product-meta">Note: {po.note}</p>}

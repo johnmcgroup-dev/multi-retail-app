@@ -791,3 +791,27 @@ header h1 { margin-bottom: 0.25rem; font-size: 1.4rem; }
 }
 .credit-limit-box { margin: 0.4rem 0 0.8rem; }
 .credit-limit-box p { margin: 0.2rem 0; }
+
+/* --- Signed-in user, always visible --- */
+.app-header-bar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg);
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.current-user { display: inline-flex; align-items: baseline; gap: 0.5rem; flex-wrap: wrap; }
+.current-user-label { font-size: 0.75rem; color: var(--muted); }
+.current-user-name { font-size: 1.15rem; color: var(--text); }
+.current-user-role {
+  padding: 0.05rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #06230f;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.current-user-tenant { font-size: 0.85rem; color: var(--muted); }
+.scan-msg { margin: 0.4rem 0 0.6rem; font-weight: 600; }

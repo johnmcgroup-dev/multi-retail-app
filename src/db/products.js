@@ -1,7 +1,7 @@
 import { query, run, runBatch } from './database';
 import { newId } from './id';
 import { createDefaultVarieties, hasConfiguredVarieties } from './varieties';
-import { getCurrentTenantId, getCurrentBranchId, requireBranchId } from './session';
+import { getCurrentTenantId, getCurrentBranchId, requireBranchId, getCurrentUser, branchFilter } from './session';
 import { PRODUCT_COLUMNS, productStockSelect, setBranchStock, stockChangeStatement } from './stock';
 
 // `quantity` on every product returned here is the stock at the branch being
@@ -42,7 +42,22 @@ function toCost(value) {
   return n;
 }
 
+// A barcode (or SKU) must identify ONE product - otherwise scanning it cannot
+// know which one you meant. Checked among this business's live products.
+function assertCodeUnique(field, value, exceptId = null) {
+  const v = (value || '').trim();
+  if (!v) return;
+  const hit = query(
+    `SELECT name FROM products WHERE tenant_id = ? AND deleted_at IS NULL AND LOWER(${field}) = LOWER(?) AND id != ?`,
+    [getCurrentTenantId(), v, exceptId || '']
+  )[0];
+  if (hit) throw new Error(`${field === 'barcode' ? 'Barcode' : 'SKU'} "${v}" is already used by "${hit.name}".`);
+}
+const sameCode = (a, b) => (a || '').trim().toLowerCase() === (b || '').trim().toLowerCase();
+
 export async function addProduct({ name, barcode, sku, categoryId, quantity, base_price, cost_price }) {
+  assertCodeUnique('barcode', barcode);
+  assertCodeUnique('sku', sku);
   const id = newId('prod');
   const branchId = getCurrentBranchId();
   await run(
@@ -59,6 +74,13 @@ export async function addProduct({ name, barcode, sku, categoryId, quantity, bas
 // Stock is only edited when a specific branch is selected; the other fields
 // are shared catalog data.
 export async function updateProduct(id, { name, barcode, sku, categoryId, quantity, base_price, cost_price }) {
+  // Only codes that are being CHANGED are checked, so editing a product whose
+  // code was already duplicated by older data does not suddenly fail.
+  const current = query(`SELECT barcode, sku FROM products WHERE id = ? AND tenant_id = ?`, [id, getCurrentTenantId()])[0];
+  if (current) {
+    if (!sameCode(barcode, current.barcode)) assertCodeUnique('barcode', barcode, id);
+    if (!sameCode(sku, current.sku)) assertCodeUnique('sku', sku, id);
+  }
   await run(
     `UPDATE products
        SET name = ?, barcode = ?, sku = ?, category_id = ?, base_price = ?, cost_price = ?, updated_at = datetime('now')
@@ -89,16 +111,22 @@ export async function addStock(productId, quantityToAdd, note = '') {
       params: [productId],
     },
     {
-      sql: `INSERT INTO stock_adjustments (id, tenant_id, product_id, branch_id, quantity_added, note) VALUES (?, ?, ?, ?, ?, ?)`,
-      params: [newId('adj'), tenantId, productId, branchId, qty, note || null],
+      sql: `INSERT INTO stock_adjustments (id, tenant_id, product_id, branch_id, quantity_added, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      params: [newId('adj'), tenantId, productId, branchId, qty, note || null, getCurrentUser()?.id ?? null],
     },
   ]);
 }
 
 export function listStockAdjustments(productId) {
+  const bf = branchFilter('a.branch_id');
   return query(
-    `SELECT * FROM stock_adjustments WHERE product_id = ? AND tenant_id = ? ORDER BY created_at DESC, rowid DESC`,
-    [productId, getCurrentTenantId()]
+    `SELECT a.*, b.name AS branch_name, u.name AS created_by_name
+     FROM stock_adjustments a
+     LEFT JOIN branches b ON b.id = a.branch_id
+     LEFT JOIN users u ON u.id = a.created_by
+     WHERE a.product_id = ? AND a.tenant_id = ?${bf.sql}
+     ORDER BY a.created_at DESC, a.rowid DESC LIMIT 50`,
+    [productId, getCurrentTenantId(), ...bf.params]
   );
 }
 

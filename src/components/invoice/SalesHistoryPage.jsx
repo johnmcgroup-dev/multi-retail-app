@@ -36,6 +36,7 @@ export default function SalesHistoryPage() {
               <th>Date</th>
               {showBranch && <th>Branch</th>}
               <th>Customer</th>
+              <th>Served by</th>
               <th>Total</th>
               <th></th>
             </tr>
@@ -47,6 +48,7 @@ export default function SalesHistoryPage() {
                 <td>{new Date(s.created_at).toLocaleString()}</td>
                 {showBranch && <td>{s.branch_name || '—'}</td>}
                 <td>{s.customer_name || 'Walk-in'}</td>
+                <td>{s.served_by_name || '—'}</td>
                 <td>{formatMoney(s.total, currencyCode)}</td>
                 <td>
                   <button className="link-btn name-link" onClick={() => setOpenSaleId(s.id)}>

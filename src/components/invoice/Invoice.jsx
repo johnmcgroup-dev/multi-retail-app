@@ -90,6 +90,7 @@ export default function Invoice({ saleId, onBack }) {
           <div><strong>Invoice #:</strong> {sale.id.slice(-8).toUpperCase()}</div>
           <div><strong>Date:</strong> {date.toLocaleDateString()} {date.toLocaleTimeString()}</div>
           {sale.branch_name && <div><strong>Branch:</strong> {sale.branch_name}</div>}
+          {sale.served_by_name && <div><strong>Served by:</strong> {sale.served_by_name}</div>}
           <div><strong>Customer:</strong> {sale.customer_name || 'N/A'}</div>
           <div><strong>Phone:</strong> {sale.customer_phone || 'N/A'}</div>
         </div>

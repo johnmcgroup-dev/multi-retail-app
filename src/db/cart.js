@@ -320,11 +320,11 @@ export async function completeSale({
   statements.push({
     sql: `INSERT INTO sales
             (id, tenant_id, branch_id, total, amount_paid, previous_balance_paid, payment_method, loyalty_points_earned,
-             customer_id, customer_name, customer_phone, credit_override_by)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             customer_id, customer_name, customer_phone, credit_override_by, created_by)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     params: [
       saleId, tenantId, branchId, saleTotal, paidTowardSale, paidTowardOldBalance, paymentMethod, pointsEarned,
-      resolvedCustomerId, customer.name || null, customer.phone || null, creditOverrideBy,
+      resolvedCustomerId, customer.name || null, customer.phone || null, creditOverrideBy, user.id,
     ],
   });
 

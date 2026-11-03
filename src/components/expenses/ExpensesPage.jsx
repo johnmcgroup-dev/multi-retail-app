@@ -161,7 +161,7 @@ export default function ExpensesPage() {
         <table className="product-table">
           <thead>
             <tr>
-              <th>Date</th><th>Category</th><th>Description</th><th>Method</th><th>Amount</th>{!currentBranchId && <th>Branch</th>}<th></th>
+              <th>Date</th><th>Category</th><th>Description</th><th>Method</th><th>Amount</th>{!currentBranchId && <th>Branch</th>}<th>Recorded by</th><th></th>
             </tr>
           </thead>
           <tbody>
@@ -195,6 +195,7 @@ export default function ExpensesPage() {
                         onChange={(e) => setEditDraft((d) => ({ ...d, amount: e.target.value }))} />
                     </td>
                     {!currentBranchId && <td>{exp.branch_name || '—'}</td>}
+                    <td>{exp.created_by_name || '—'}</td>
                     <td className="cart-row-actions">
                       <button className="link-btn name-link" onClick={() => saveEdit(exp.id)}>Save</button>
                       <button className="link-btn" onClick={() => setEditingId(null)}>Cancel</button>
@@ -208,6 +209,7 @@ export default function ExpensesPage() {
                     <td>{PAYMENT_METHODS.find((m) => m.value === exp.payment_method)?.label || exp.payment_method}</td>
                     <td>{formatMoney(exp.amount, currencyCode)}</td>
                     {!currentBranchId && <td>{exp.branch_name || '—'}</td>}
+                    <td>{exp.created_by_name || '—'}</td>
                     <td className="cart-row-actions">
                       <button className="link-btn name-link" onClick={() => startEdit(exp)}>Edit</button>
                       <button className="link-btn danger" onClick={() => handleDelete(exp.id)}>Delete</button>

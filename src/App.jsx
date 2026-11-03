@@ -74,6 +74,15 @@ export default function App() {
     })();
   }, []);
 
+  // Browser tab title: who is signed in, and to which business.
+  useEffect(() => {
+    const base = 'Wholesale/Retail Inventory with POS';
+    const user = authStep === 'app' && ready ? getCurrentUser() : null;
+    if (!user) { document.title = base; return; }
+    const tenant = listAllTenants().find((t) => t.id === getViewingTenantId());
+    document.title = `${user.name}${tenant ? ` · ${tenant.name}` : ''} - ${base}`;
+  }, [authStep, ready, branchVersion]);
+
   function evaluateAuthStep() {
     if (!superAdminExists()) {
       setAuthStep('bootstrap');
@@ -220,7 +229,12 @@ export default function App() {
       <div className="app-header-bar no-print">
         <div className="app-brand">Wholesale/Retail Inventory with POS</div>
         <div className="app-identity">
-          <span>{tenant?.name || 'Super Admin'} · {user.name} ({user.role.replace('_', ' ')})</span>
+          <span className="current-user">
+            <span className="current-user-label">Signed in as</span>
+            <strong className="current-user-name">{user.name}</strong>
+            <span className="current-user-role">{user.role.replace('_', ' ')}</span>
+            <span className="current-user-tenant">{tenant?.name || 'All businesses'}</span>
+          </span>
           <BranchSwitcher user={user} onChange={handleBranchChange} />
           {user.role === 'super_admin' && (
             <button className="link-btn name-link" onClick={handleSwitchTenant}>Switch Tenant</button>

@@ -1,6 +1,6 @@
 import { query, run } from './database';
 import { newId } from './id';
-import { getCurrentTenantId, getCurrentBranchId, branchFilter } from './session';
+import { getCurrentTenantId, getCurrentBranchId, branchFilter, getCurrentUser } from './session';
 
 const PLACEHOLDER_CATEGORIES = ['Rent', 'Utilities', 'Salaries', 'Transport', 'Supplies', 'Other'];
 
@@ -45,10 +45,11 @@ export function listExpenses({ from = null, to = null, categoryId = null } = {})
   const bf = branchFilter('e.branch_id');
 
   return query(
-    `SELECT e.*, c.name AS category_name, b.name AS branch_name
+    `SELECT e.*, c.name AS category_name, b.name AS branch_name, u.name AS created_by_name
      FROM expenses e
      LEFT JOIN expense_categories c ON c.id = e.category_id
      LEFT JOIN branches b ON b.id = e.branch_id
+     LEFT JOIN users u ON u.id = e.created_by
      WHERE ${clauses.join(' AND ')}${bf.sql}
      ORDER BY e.expense_date DESC, e.created_at DESC, e.rowid DESC`,
     [...params, ...bf.params]
@@ -69,9 +70,9 @@ export async function addExpense({ categoryId, amount, description, paymentMetho
 
   const id = newId('exp');
   await run(
-    `INSERT INTO expenses (id, tenant_id, branch_id, category_id, amount, description, payment_method, expense_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, getCurrentTenantId(), branch, categoryId || null, amt, description || null, paymentMethod || 'cash', expenseDate]
+    `INSERT INTO expenses (id, tenant_id, branch_id, category_id, amount, description, payment_method, expense_date, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [id, getCurrentTenantId(), branch, categoryId || null, amt, description || null, paymentMethod || 'cash', expenseDate, getCurrentUser()?.id ?? null]
   );
   return id;
 }

@@ -5,6 +5,7 @@ import VarietyPickerModal from './VarietyPickerModal';
 import CartPanel from './CartPanel';
 import Invoice from '../invoice/Invoice';
 import AddStockModal from './AddStockModal';
+import { listVarietiesForProduct, PIECE_NAME } from '../../db/varieties';
 
 export default function POSPage() {
   const [cartItems, setCartItems] = useState([]);
@@ -12,6 +13,7 @@ export default function POSPage() {
   const [addStockModalOpen, setAddStockModalOpen] = useState(false);
   const [addStockInitialProduct, setAddStockInitialProduct] = useState(null);
   const [saleMessage, setSaleMessage] = useState('');
+  const [scanMessage, setScanMessage] = useState(null); // { ok, text } feedback for the last scan
   const [lastSaleId, setLastSaleId] = useState(null);
   const [viewingInvoice, setViewingInvoice] = useState(false);
   // Bumped after any cart change or completed sale, so the search box
@@ -38,6 +40,28 @@ export default function POSPage() {
   function handleCartChanged() {
     refreshCart();
     bumpRefresh();
+  }
+
+  // A scanned barcode / QR code: one Piece goes straight into the cart, and
+  // scanning the same item again simply raises its quantity. Stock limits apply.
+  async function handleScan(product) {
+    const piece = listVarietiesForProduct(product.id).find((v) => v.name === PIECE_NAME);
+    try {
+      await addToCart(product, piece, 1);
+      refreshCart();
+      bumpRefresh();
+      const line = listCart().find((i) => i.product_id === product.id && i.variety_id === piece.id);
+      setScanMessage({ ok: true, text: `${product.name} - ${line ? line.quantity : 1} in cart` });
+    } catch (err) {
+      setScanMessage({ ok: false, text: `${product.name}: ${err.message}` });
+    }
+  }
+
+  function handleScanMiss(code, why) {
+    setScanMessage({
+      ok: false,
+      text: why === 'ambiguous' ? `Several products share the code "${code}" - search by name instead.` : `No product found for "${code}".`,
+    });
   }
 
   function openAddStock(product = null) {
@@ -81,8 +105,11 @@ export default function POSPage() {
       <POSSearchBox
         onSelectProduct={setPickerProduct}
         onQuickAddStock={openAddStock}
+        onScan={handleScan}
+        onScanMiss={handleScanMiss}
         refreshSignal={refreshSignal}
       />
+      {scanMessage && <p className={scanMessage.ok ? 'saved-msg scan-msg' : 'modal-error scan-msg'}>{scanMessage.text}</p>}
 
       {saleMessage && (
         <p className="saved-msg sale-msg">

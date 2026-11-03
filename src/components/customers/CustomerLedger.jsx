@@ -217,6 +217,7 @@ export default function CustomerLedger({ customerId, onBack, onChanged }) {
               <th>Type</th>
               <th>Method</th>
               <th>Note</th>
+              <th>By</th>
               <th>Amount</th>
               <th>Balance After</th>
             </tr>
@@ -228,6 +229,7 @@ export default function CustomerLedger({ customerId, onBack, onChanged }) {
                 <td>{entry.type === 'payment' ? 'Payment' : entry.type === 'sale_credit' ? 'Sale (credit)' : 'Adjustment'}</td>
                 <td>{entry.payment_method || '—'}</td>
                 <td>{entry.note || '—'}</td>
+                <td>{entry.created_by_name || '—'}</td>
                 <td className={entry.type === 'payment' ? 'ledger-credit' : 'ledger-debit'}>
                   {entry.type === 'payment' ? '-' : '+'}{formatMoney(entry.amount, currencyCode)}
                 </td>

@@ -1,11 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { searchProducts } from '../../db/search';
+import { useScanInput } from '../scanner/useScanInput';
 
-export default function POSSearchBox({ onSelectProduct, onQuickAddStock, refreshSignal }) {
+export default function POSSearchBox({ onSelectProduct, onQuickAddStock, onScan, onScanMiss, refreshSignal }) {
   const [term, setTerm] = useState('');
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
   const boxRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // A scanned code adds the item to the cart by itself; the box is cleared and
+  // keeps focus so the next item can be scanned straight away.
+  const scan = useScanInput({
+    clear: () => { setTerm(''); setOpen(false); inputRef.current?.focus(); },
+    onFound: (product) => onScan?.(product),
+    onMiss: (code, why) => onScanMiss?.(code, why),
+  });
 
   useEffect(() => {
     setResults(searchProducts(term));
@@ -29,18 +39,28 @@ export default function POSSearchBox({ onSelectProduct, onQuickAddStock, refresh
     setOpen(false);
   }
 
+  function handleKeyDown(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (scan.onEnter(term)) return;                         // exact barcode/SKU: added
+    if (term.trim() && results.length === 0) onScanMiss?.(term.trim(), 'notfound');
+  }
+
   return (
     <div className="pos-search" ref={boxRef}>
       <div className="pos-search-input-row">
         <input
+          ref={inputRef}
+          autoFocus
           className="pos-search-input"
-          placeholder="Search by name, category, barcode, or SKU…"
+          placeholder="Scan a barcode / QR code, or search by name, category, barcode, or SKU…"
           value={term}
-          onChange={(e) => { setTerm(e.target.value); setOpen(true); }}
+          onChange={(e) => { setTerm(e.target.value); setOpen(true); scan.onValueChange(e.target.value); }}
+          onKeyDown={handleKeyDown}
           onFocus={() => setOpen(true)}
         />
         {term && (
-          <button className="pos-search-clear" onClick={() => setTerm('')} aria-label="Clear search">
+          <button className="pos-search-clear" onClick={() => { setTerm(''); scan.reset(); }} aria-label="Clear search">
             ×
           </button>
         )}

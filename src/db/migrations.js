@@ -144,6 +144,13 @@ export async function runMigrations() {
   await addColumnIfMissing('company_settings', 'default_credit_limit', 'REAL');
   await addColumnIfMissing('sales', 'credit_override_by', 'TEXT');
 
+  // Who recorded each transaction (older rows stay NULL: we cannot know, so we do not guess)
+  await addColumnIfMissing('sales', 'created_by', 'TEXT');
+  await addColumnIfMissing('expenses', 'created_by', 'TEXT');
+  await addColumnIfMissing('stock_adjustments', 'created_by', 'TEXT');
+  await addColumnIfMissing('customer_ledger', 'created_by', 'TEXT');
+  await addColumnIfMissing('supplier_ledger', 'created_by', 'TEXT');
+
   backfillBranches();
   backfillAverageCosts();
 }

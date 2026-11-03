@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS customer_ledger (
   balance_after REAL NOT NULL,
   payment_method TEXT,        -- only meaningful when type = 'payment'
   branch_id TEXT REFERENCES branches(id),
+  created_by TEXT REFERENCES users(id),
   note TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -171,6 +172,7 @@ CREATE TABLE IF NOT EXISTS sales (
   loyalty_points_earned INTEGER NOT NULL DEFAULT 0,
   branch_id TEXT REFERENCES branches(id),
   customer_id TEXT REFERENCES customers(id),
+  created_by TEXT REFERENCES users(id),         -- who rang up this sale
   credit_override_by TEXT REFERENCES users(id), -- set when an Owner/Admin approved this sale over the customer's credit limit
   customer_name TEXT,   -- snapshot at time of sale, so invoices stay stable
   customer_phone TEXT,  -- even if the customer record is edited later
@@ -225,6 +227,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   payment_method TEXT NOT NULL DEFAULT 'cash',
   expense_date TEXT NOT NULL DEFAULT (date('now')),
   branch_id TEXT REFERENCES branches(id),
+  created_by TEXT REFERENCES users(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -235,6 +238,7 @@ CREATE TABLE IF NOT EXISTS stock_adjustments (
   tenant_id TEXT NOT NULL REFERENCES tenants(id),
   product_id TEXT NOT NULL REFERENCES products(id),
   branch_id TEXT REFERENCES branches(id),
+  created_by TEXT REFERENCES users(id),
   quantity_added REAL NOT NULL,
   note TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -289,6 +293,7 @@ CREATE TABLE IF NOT EXISTS supplier_ledger (
   supplier_id TEXT NOT NULL REFERENCES suppliers(id),
   purchase_order_id TEXT REFERENCES purchase_orders(id),
   type TEXT NOT NULL CHECK (type IN ('purchase', 'payment', 'adjustment')),
+  created_by TEXT REFERENCES users(id),
   amount REAL NOT NULL,
   balance_after REAL NOT NULL,
   payment_method TEXT,

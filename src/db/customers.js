@@ -70,8 +70,9 @@ export async function updateCustomer(id, { name, phone, address }) {
 
 export function listCustomerLedger(customerId) {
   return query(
-    `SELECT * FROM customer_ledger WHERE customer_id = ? ORDER BY created_at ASC`,
-    [customerId]
+    `SELECT l.*, u.name AS created_by_name FROM customer_ledger l LEFT JOIN users u ON u.id = l.created_by
+     WHERE l.customer_id = ? AND l.tenant_id = ? ORDER BY l.created_at ASC, l.rowid ASC`,
+    [customerId, getCurrentTenantId()]
   );
 }
 
@@ -94,13 +95,13 @@ export function ledgerStatements({ customerId, balanceBefore, type, amount, note
     statements: [
       { sql: `UPDATE customers SET balance = ROUND(balance + ?, 2) WHERE id = ? AND tenant_id = ?`, params: [delta, customerId, tenantId] },
       {
-        sql: `INSERT INTO customer_ledger (id, tenant_id, branch_id, customer_id, sale_id, type, amount, balance_after, payment_method, note)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO customer_ledger (id, tenant_id, branch_id, customer_id, sale_id, type, amount, balance_after, payment_method, note, created_by)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         // Customers are shared by the whole tenant, but each money movement is
         // attributed to the branch it happened at (the default branch when an
         // owner records it while viewing all branches).
         params: [newId('ledg'), tenantId, branchId || getCurrentBranchId() || getDefaultBranchId(tenantId),
-          customerId, saleId, type, amount, balanceAfter, paymentMethod, note || null],
+          customerId, saleId, type, amount, balanceAfter, paymentMethod, note || null, getCurrentUser()?.id ?? null],
       },
     ],
   };
